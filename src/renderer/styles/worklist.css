@@ -1,0 +1,117 @@
+/* Worklist Styles */
+#load-study-btn {
+    width: calc(100% - 32px);
+    margin: 16px;
+}
+
+.worklist-items {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.worklist-item {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.worklist-item:hover {
+    background: #2f2f2f;
+    border-color: var(--accent-primary);
+}
+
+.worklist-item.active {
+    border-color: var(--accent-primary);
+    background: rgba(74, 158, 255, 0.1);
+}
+
+.worklist-item.priority-critical {
+    border-left: 4px solid var(--accent-critical);
+}
+
+.worklist-item.priority-urgent {
+    border-left: 4px solid var(--accent-warning);
+}
+
+.worklist-item.priority-routine {
+    border-left: 4px solid var(--accent-success);
+}
+
+.study-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.study-modality {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--accent-primary);
+}
+
+.priority-badge {
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.priority-badge.critical {
+    background: var(--accent-critical);
+    color: white;
+}
+
+.priority-badge.urgent {
+    background: var(--accent-warning);
+    color: white;
+}
+
+.priority-badge.routine {
+    background: var(--accent-success);
+    color: white;
+}
+
+.patient-meta {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+.ai-reason {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-color);
+    font-style: italic;
+}
+
+.confidence-bar-container {
+    margin-top: 8px;
+}
+
+.confidence-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+}
+
+.confidence-bar {
+    height: 4px;
+    background: var(--bg-panel);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.confidence-fill {
+    height: 100%;
+    background: var(--accent-primary);
+    transition: width 0.3s;
+}
