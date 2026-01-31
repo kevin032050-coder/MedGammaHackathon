@@ -58,8 +58,9 @@ class FeedbackRequest(BaseModel):
 class GetSliceImageRequest(BaseModel):
     study_id: str
     slice_index: int
-    window_center: Optional[int] = 40
-    window_width: Optional[int] = 80
+    window_center: Optional[int] = None
+    window_width: Optional[int] = None
+    window_preset: Optional[str] = None
 
 # API Endpoints
 @app.get("/health")
