@@ -224,7 +224,7 @@ class DICOMProcessor:
         # 4. Return as base64 or bytes
         pass
     
-    def get_slice_image(self, study_id: str, slice_index: int, window_center: int = 40, window_width: int = 80) -> str:
+    def get_slice_image(self, study_id: str, slice_index: int, window_center: int = None, window_width: int = None) -> str:
         """
         Get slice image as base64 string for display
         """
@@ -242,8 +242,34 @@ class DICOMProcessor:
             ds = pydicom.dcmread(file_path)
             
             # Get pixel array
-            pixel_array = ds.pixel_array
+            pixel_array = ds.pixel_array.astype(np.float32)
             logger.info(f"Pixel array shape: {pixel_array.shape}, dtype: {pixel_array.dtype}")
+            logger.info(f"Pixel value range: {pixel_array.min()} to {pixel_array.max()}")
+            
+            # Auto-calculate window/level if not provided
+            if window_center is None or window_width is None:
+                # Try to get from DICOM tags first
+                if hasattr(ds, 'WindowCenter') and hasattr(ds, 'WindowWidth'):
+                    if isinstance(ds.WindowCenter, (list, pydicom.multival.MultiValue)):
+                        window_center = float(ds.WindowCenter[0])
+                        window_width = float(ds.WindowWidth[0])
+                    else:
+                        window_center = float(ds.WindowCenter)
+                        window_width = float(ds.WindowWidth)
+                    logger.info(f"Using DICOM window/level: {window_center}/{window_width}")
+                else:
+                    # Auto-calculate from pixel statistics
+                    # Use percentile-based approach for robust windowing
+                    p2 = np.percentile(pixel_array, 2)
+                    p98 = np.percentile(pixel_array, 98)
+                    window_center = (p2 + p98) / 2
+                    window_width = p98 - p2
+                    logger.info(f"Auto-calculated window/level: {window_center}/{window_width}")
+            
+            # Apply Rescale Slope/Intercept if present (for CT Hounsfield units)
+            if hasattr(ds, 'RescaleSlope') and hasattr(ds, 'RescaleIntercept'):
+                pixel_array = pixel_array * float(ds.RescaleSlope) + float(ds.RescaleIntercept)
+                logger.info(f"Applied rescale - new range: {pixel_array.min()} to {pixel_array.max()}")
             
             # Apply window/level
             img_array = self._apply_window_level(pixel_array, window_center, window_width)
@@ -273,7 +299,7 @@ class DICOMProcessor:
             logger.error(traceback.format_exc())
             return None
     
-    def _apply_window_level(self, pixel_array: np.ndarray, center: int, width: int) -> np.ndarray:
+    def _apply_window_level(self, pixel_array: np.ndarray, center: float, width: float) -> np.ndarray:
         """Apply window/level to pixel array"""
         # Handle different array shapes
         if len(pixel_array.shape) == 3:
@@ -291,17 +317,22 @@ class DICOMProcessor:
         if len(pixel_array.shape) > 2:
             pixel_array = pixel_array.reshape(pixel_array.shape[-2], pixel_array.shape[-1])
         
-        img_min = center - width // 2
-        img_max = center + width // 2
+        # Calculate min/max from center and width
+        img_min = center - width / 2
+        img_max = center + width / 2
         
-        # Clip values
+        # Clip values to window
         windowed = np.clip(pixel_array, img_min, img_max)
         
         # Normalize to 0-255
-        if img_max > img_min:
-            windowed = ((windowed - img_min) / (img_max - img_min) * 255.0)
+        if width > 0:
+            windowed = ((windowed - img_min) / width * 255.0)
         else:
-            windowed = np.zeros_like(windowed)
+            # If width is 0, just normalize based on actual range
+            if windowed.max() > windowed.min():
+                windowed = ((windowed - windowed.min()) / (windowed.max() - windowed.min()) * 255.0)
+            else:
+                windowed = np.zeros_like(windowed)
         
         return windowed
     

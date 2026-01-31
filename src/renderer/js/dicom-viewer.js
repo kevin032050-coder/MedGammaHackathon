@@ -93,11 +93,11 @@ class DICOMViewer {
             const response = await window.electronAPI.getSliceImage(
                 this.app.currentStudy.study_id,
                 sliceIndex,
-                40, // window center
-                80  // window width
+                null, // Let backend auto-calculate window center
+                null  // Let backend auto-calculate window width
             );
 
-            console.log('Image response:', response);
+            console.log('Image response received');
 
             if (response.success && response.image_data) {
                 // Load image from base64
