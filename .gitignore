@@ -1,0 +1,57 @@
+# Node modules
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python virtual environment
+src/python/venv/
+src/python/__pycache__/
+src/python/*.pyc
+*.py[cod]
+*$py.class
+
+# Electron build output
+dist/
+build/
+*.dmg
+*.exe
+*.AppImage
+
+# Environment variables
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+logs/
+*.log
+
+# Med Gemma models (large files)
+src/python/models/
+*.pth
+*.bin
+*.onnx
+
+# DICOM sample data (can be large)
+sample-data/dicom/*
+!sample-data/dicom/.gitkeep
+
+# Temporary files
+*.tmp
+temp/
+.cache/
+
+# Package lock files (optional - remove if you want to commit them)
+# package-lock.json
