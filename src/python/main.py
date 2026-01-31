@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import uvicorn
@@ -239,8 +240,9 @@ async def get_dicom_urls(request: AnalyzeStudyRequest):
         study_data = dicom_processor.get_study(request.study_id)
         dicom_files = study_data.get('dicom_files', [])
         
-        # Convert file paths to file:// URLs
-        urls = [f"file://{filepath}" for filepath in dicom_files]
+        # Return URLs to backend endpoints instead of file:// URLs
+        urls = [f"http://localhost:8000/api/dicom-file/{request.study_id}/{i}" 
+                for i in range(len(dicom_files))]
         
         return {
             "success": True,
@@ -248,6 +250,27 @@ async def get_dicom_urls(request: AnalyzeStudyRequest):
         }
     except Exception as e:
         logger.error(f"Error getting DICOM URLs: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/dicom-file/{study_id}/{file_index}")
+async def get_dicom_file(study_id: str, file_index: int):
+    """Serve raw DICOM file for DWV"""
+    try:
+        study_data = dicom_processor.get_study(study_id)
+        dicom_files = study_data.get('dicom_files', [])
+        
+        if file_index >= len(dicom_files):
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        filepath = dicom_files[file_index]
+        
+        # Read and return raw DICOM file
+        with open(filepath, 'rb') as f:
+            content = f.read()
+        
+        return Response(content=content, media_type="application/dicom")
+    except Exception as e:
+        logger.error(f"Error serving DICOM file: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.on_event("startup")
