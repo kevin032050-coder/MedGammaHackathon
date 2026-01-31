@@ -6,6 +6,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 16px;
 }
 
 .control-group {
@@ -19,6 +20,25 @@
     display: flex;
     align-items: center;
     gap: 6px;
+}
+
+.zoom-controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.zoom-controls button {
+    min-width: 32px;
+    padding: 4px 8px;
+}
+
+#zoom-level {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent-primary);
+    min-width: 50px;
+    text-align: center;
 }
 
 .slice-info {

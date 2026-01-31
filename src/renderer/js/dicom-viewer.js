@@ -7,6 +7,17 @@ class DICOMViewer {
         this.overlayCanvas = document.getElementById('overlay-canvas');
         this.slider = document.getElementById('slice-slider');
         
+        // Zoom and pan state
+        this.zoomLevel = 1.0;
+        this.minZoom = 0.5;
+        this.maxZoom = 4.0;
+        this.panX = 0;
+        this.panY = 0;
+        this.isDragging = false;
+        this.lastMouseX = 0;
+        this.lastMouseY = 0;
+        this.currentImage = null;
+        
         this.setupEventListeners();
     }
 
@@ -27,6 +38,110 @@ class DICOMViewer {
                 this.goToSlice(this.app.currentSlice - 1);
             }
         });
+
+        // Mouse wheel zoom
+        this.canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? -0.1 : 0.1;
+            this.setZoom(this.zoomLevel + delta);
+        });
+
+        // Pan with mouse drag
+        this.canvas.addEventListener('mousedown', (e) => {
+            if (this.zoomLevel > 1.0) {
+                this.isDragging = true;
+                this.lastMouseX = e.clientX;
+                this.lastMouseY = e.clientY;
+                this.canvas.style.cursor = 'grabbing';
+            }
+        });
+
+        this.canvas.addEventListener('mousemove', (e) => {
+            if (this.isDragging) {
+                const dx = e.clientX - this.lastMouseX;
+                const dy = e.clientY - this.lastMouseY;
+                this.panX += dx;
+                this.panY += dy;
+                this.lastMouseX = e.clientX;
+                this.lastMouseY = e.clientY;
+                this.redrawImage();
+            }
+        });
+
+        this.canvas.addEventListener('mouseup', () => {
+            this.isDragging = false;
+            this.canvas.style.cursor = this.zoomLevel > 1.0 ? 'grab' : 'default';
+        });
+
+        this.canvas.addEventListener('mouseleave', () => {
+            this.isDragging = false;
+            this.canvas.style.cursor = 'default';
+        });
+
+        // Zoom buttons
+        document.getElementById('zoom-in-btn').addEventListener('click', () => {
+            this.setZoom(this.zoomLevel + 0.25);
+        });
+
+        document.getElementById('zoom-out-btn').addEventListener('click', () => {
+            this.setZoom(this.zoomLevel - 0.25);
+        });
+
+        document.getElementById('zoom-reset-btn').addEventListener('click', () => {
+            this.resetZoom();
+        });
+    }
+
+    setZoom(newZoom) {
+        this.zoomLevel = Math.max(this.minZoom, Math.min(this.maxZoom, newZoom));
+        document.getElementById('zoom-level').textContent = `${Math.round(this.zoomLevel * 100)}%`;
+        this.canvas.style.cursor = this.zoomLevel > 1.0 ? 'grab' : 'default';
+        this.redrawImage();
+    }
+
+    resetZoom() {
+        this.zoomLevel = 1.0;
+        this.panX = 0;
+        this.panY = 0;
+        document.getElementById('zoom-level').textContent = '100%';
+        this.canvas.style.cursor = 'default';
+        this.redrawImage();
+    }
+
+    redrawImage() {
+        if (!this.currentImage) return;
+
+        // Clear canvas
+        this.ctx.fillStyle = '#0a0a0a';
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+        // Calculate image dimensions with zoom
+        const aspectRatio = this.currentImage.width / this.currentImage.height;
+        let baseWidth, baseHeight, offsetX, offsetY;
+
+        if (aspectRatio > 1) {
+            baseWidth = this.canvas.width;
+            baseHeight = this.canvas.width / aspectRatio;
+            offsetX = 0;
+            offsetY = (this.canvas.height - baseHeight) / 2;
+        } else {
+            baseHeight = this.canvas.height;
+            baseWidth = this.canvas.height * aspectRatio;
+            offsetX = (this.canvas.width - baseWidth) / 2;
+            offsetY = 0;
+        }
+
+        // Apply zoom
+        const zoomedWidth = baseWidth * this.zoomLevel;
+        const zoomedHeight = baseHeight * this.zoomLevel;
+        const zoomedX = offsetX + (baseWidth - zoomedWidth) / 2 + this.panX;
+        const zoomedY = offsetY + (baseHeight - zoomedHeight) / 2 + this.panY;
+
+        // Disable smoothing for pixel-perfect rendering
+        this.ctx.imageSmoothingEnabled = false;
+
+        // Draw zoomed image
+        this.ctx.drawImage(this.currentImage, zoomedX, zoomedY, zoomedWidth, zoomedHeight);
     }
 
     loadStudy(study) {
@@ -103,33 +218,14 @@ class DICOMViewer {
                     console.log('Image loaded successfully');
                     console.log(`Image dimensions: ${img.width}x${img.height}`);
                     
+                    // Store current image for zoom/pan
+                    this.currentImage = img;
+                    
                     // Display resolution info
                     document.getElementById('resolution-info').textContent = `${img.width}x${img.height}px`;
                     
-                    // Center image on canvas and preserve aspect ratio
-                    const aspectRatio = img.width / img.height;
-                    let drawWidth, drawHeight, offsetX, offsetY;
-                    
-                    if (aspectRatio > 1) {
-                        // Wider than tall
-                        drawWidth = this.canvas.width;
-                        drawHeight = this.canvas.width / aspectRatio;
-                        offsetX = 0;
-                        offsetY = (this.canvas.height - drawHeight) / 2;
-                    } else {
-                        // Taller than wide
-                        drawHeight = this.canvas.height;
-                        drawWidth = this.canvas.height * aspectRatio;
-                        offsetX = (this.canvas.width - drawWidth) / 2;
-                        offsetY = 0;
-                    }
-                    
-                    // Use high-quality image smoothing
-                    this.ctx.imageSmoothingEnabled = true;
-                    this.ctx.imageSmoothingQuality = 'high';
-                    
-                    // Draw centered image
-                    this.ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
+                    // Draw with current zoom/pan
+                    this.redrawImage();
                 };
                 img.onerror = (error) => {
                     console.error('Image failed to load:', error);
