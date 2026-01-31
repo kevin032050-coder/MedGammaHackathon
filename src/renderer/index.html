@@ -10,7 +10,13 @@
     <link rel="stylesheet" href="styles/report.css">
     
     <!-- DWV Library -->
-    <script src="../../node_modules/dwv/dist/dwv.js"></script>
+    <script>
+        console.log('Loading DWV from:', '../../node_modules/dwv/dist/dwv.min.js');
+    </script>
+    <script src="../../node_modules/dwv/dist/dwv.min.js"></script>
+    <script>
+        console.log('DWV loaded, global dwv:', typeof dwv);
+    </script>
 </head>
 <body>
     <!-- Disclaimer Banner -->
