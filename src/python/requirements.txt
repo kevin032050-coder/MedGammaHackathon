@@ -1,22 +1,46 @@
-# FastAPI Backend
+# MedGemma Radiology PACS - Python Dependencies
+# Tested on Python 3.9+
+
+# Web Framework
 fastapi==0.109.0
 uvicorn[standard]==0.27.0
 pydantic==2.5.3
-
-# DICOM Processing
-pydicom==2.4.4
-pillow==10.2.0
-numpy>=1.24.0
-
-# Med Gemma Model
-# Note: Med Gemma requires specific setup - adjust based on actual model requirements
-# transformers==4.36.2
-# torch==2.1.2
-# or tensorflow==2.15.0
-
-# For now, using placeholder for Med Gemma
-# Will be replaced with actual Med Gemma installation instructions
-
-# Utilities
 python-multipart==0.0.6
 aiofiles==23.2.1
+
+# DICOM Processing
+pydicom==2.4.4              # DICOM file parsing
+pillow==10.2.0              # Image processing
+numpy>=1.24.0,<2.0.0        # Numerical computing (use pre-built wheels)
+
+# Optional: Image Enhancement
+# scipy>=1.11.0             # Uncomment if using advanced filters
+
+# Med Gemma Model (Placeholder)
+# =================================
+# Currently using mock responses for development
+# To integrate real Med Gemma, add:
+#
+# Option A: Transformers (Recommended)
+# transformers==4.36.2
+# torch==2.1.2              # For PyTorch backend
+# accelerate==0.25.0        # For optimized inference
+#
+# Option B: TensorFlow
+# tensorflow==2.15.0
+#
+# Note: Med Gemma requires significant compute resources
+# GPU recommended for real-time inference
+
+# Installation Notes:
+# ====================
+# 1. NumPy: Install pre-built wheels to avoid compilation
+#    pip install numpy --only-binary :all:
+#
+# 2. Large packages: FastAPI + Uvicorn ~50MB, Pillow ~3MB
+#
+# 3. Total install time: ~2-3 minutes on good connection
+#
+# 4. Verify installation:
+#    python -c "import pydicom; import numpy; import PIL; print('Success!')"
+
