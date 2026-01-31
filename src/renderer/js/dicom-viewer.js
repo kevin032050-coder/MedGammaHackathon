@@ -40,37 +40,40 @@ class DICOMViewer {
             });
             console.log('DWV App configured');
 
-            // Listen for load complete
+            // Listen for ALL events
             this.dwvApp.addEventListener('load', (event) => {
-                console.log('DWV load event:', event);
-                
-                // Set scroll tool
+                console.log('✅ DWV LOAD EVENT:', event);
                 this.dwvApp.setTool('Scroll');
-                
-                // Apply window preset after a short delay
-                setTimeout(() => {
-                    this.applyWindowPreset(this.currentPreset);
-                }, 200);
+                setTimeout(() => this.applyWindowPreset(this.currentPreset), 200);
             });
             
-            // Listen for load end
+            this.dwvApp.addEventListener('loadstart', (event) => {
+                console.log('📥 DWV LOADSTART:', event);
+            });
+            
+            this.dwvApp.addEventListener('loadprogress', (event) => {
+                console.log('⏳ DWV PROGRESS:', event.loaded, '/', event.total);
+            });
+            
             this.dwvApp.addEventListener('loadend', (event) => {
-                console.log('DWV loadend event:', event);
+                console.log('✅ DWV LOADEND:', event);
+                this.app.showToast('DICOM files loaded successfully!', 'success');
+            });
+            
+            this.dwvApp.addEventListener('loaditem', (event) => {
+                console.log('📄 DWV LOADITEM:', event);
             });
 
-            // Handle slice change
             this.dwvApp.addEventListener('positionchange', (event) => {
-                console.log('Position change:', event);
-                const position = event.value[2]; // Z position (slice)
+                const position = event.value[2];
                 if (position !== undefined) {
                     this.slider.value = position;
                     this.updateSliceInfo(position);
                 }
             });
             
-            // Error handling
             this.dwvApp.addEventListener('error', (event) => {
-                console.error('DWV error:', event);
+                console.error('❌ DWV ERROR:', event);
             });
 
             this.isInitialized = true;
