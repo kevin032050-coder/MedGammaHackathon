@@ -33,8 +33,9 @@ class DICOMViewer {
         console.log('Loading study:', study);
         console.log('Number of slices:', study.num_slices);
         
-        this.canvas.width = 512;
-        this.canvas.height = 512;
+        // Use larger canvas for better quality
+        this.canvas.width = 768;
+        this.canvas.height = 768;
 
         // Enable controls
         this.slider.disabled = false;
@@ -88,8 +89,6 @@ class DICOMViewer {
 
         // Try to load real DICOM image
         try {
-            console.log(`Requesting image for study: ${this.app.currentStudy.study_id}, slice: ${sliceIndex}`);
-            
             const response = await window.electronAPI.getSliceImage(
                 this.app.currentStudy.study_id,
                 sliceIndex,
@@ -97,14 +96,36 @@ class DICOMViewer {
                 null  // Let backend auto-calculate window width
             );
 
-            console.log('Image response received');
-
             if (response.success && response.image_data) {
                 // Load image from base64
                 const img = new Image();
                 img.onload = () => {
-                    console.log('Image loaded successfully, drawing to canvas');
-                    this.ctx.drawImage(img, 0, 0, this.canvas.width, this.canvas.height);
+                    console.log('Image loaded successfully');
+                    
+                    // Center image on canvas and preserve aspect ratio
+                    const aspectRatio = img.width / img.height;
+                    let drawWidth, drawHeight, offsetX, offsetY;
+                    
+                    if (aspectRatio > 1) {
+                        // Wider than tall
+                        drawWidth = this.canvas.width;
+                        drawHeight = this.canvas.width / aspectRatio;
+                        offsetX = 0;
+                        offsetY = (this.canvas.height - drawHeight) / 2;
+                    } else {
+                        // Taller than wide
+                        drawHeight = this.canvas.height;
+                        drawWidth = this.canvas.height * aspectRatio;
+                        offsetX = (this.canvas.width - drawWidth) / 2;
+                        offsetY = 0;
+                    }
+                    
+                    // Use high-quality image smoothing
+                    this.ctx.imageSmoothingEnabled = true;
+                    this.ctx.imageSmoothingQuality = 'high';
+                    
+                    // Draw centered image
+                    this.ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
                 };
                 img.onerror = (error) => {
                     console.error('Image failed to load:', error);

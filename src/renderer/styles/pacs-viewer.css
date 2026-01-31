@@ -40,9 +40,10 @@
 
 .dicom-canvas {
     position: relative;
-    width: 512px;
-    height: 512px;
+    width: 768px;
+    height: 768px;
     background: #0a0a0a;
+    margin: 0 auto;
 }
 
 #image-canvas {

@@ -226,7 +226,7 @@ class DICOMProcessor:
     
     def get_slice_image(self, study_id: str, slice_index: int, window_center: int = None, window_width: int = None) -> str:
         """
-        Get slice image as base64 string for display
+        Get slice image as base64 string for display - HIGH QUALITY
         """
         if not DICOM_AVAILABLE:
             return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
@@ -238,13 +238,18 @@ class DICOMProcessor:
                 return None
             
             file_path = study['dicom_files'][slice_index]
-            logger.info(f"Reading DICOM file: {file_path}")
             ds = pydicom.dcmread(file_path)
             
-            # Get pixel array
-            pixel_array = ds.pixel_array.astype(np.float32)
-            logger.info(f"Pixel array shape: {pixel_array.shape}, dtype: {pixel_array.dtype}")
+            # Get pixel array with proper data type
+            pixel_array = ds.pixel_array.astype(np.float64)  # Use float64 for precision
+            original_shape = pixel_array.shape
+            logger.info(f"Original pixel array shape: {original_shape}, dtype: {pixel_array.dtype}")
             logger.info(f"Pixel value range: {pixel_array.min()} to {pixel_array.max()}")
+            
+            # Apply Rescale Slope/Intercept if present (for CT Hounsfield units)
+            if hasattr(ds, 'RescaleSlope') and hasattr(ds, 'RescaleIntercept'):
+                pixel_array = pixel_array * float(ds.RescaleSlope) + float(ds.RescaleIntercept)
+                logger.info(f"Applied rescale - new range: {pixel_array.min()} to {pixel_array.max()}")
             
             # Auto-calculate window/level if not provided
             if window_center is None or window_width is None:
@@ -259,38 +264,52 @@ class DICOMProcessor:
                     logger.info(f"Using DICOM window/level: {window_center}/{window_width}")
                 else:
                     # Auto-calculate from pixel statistics
-                    # Use percentile-based approach for robust windowing
                     p2 = np.percentile(pixel_array, 2)
                     p98 = np.percentile(pixel_array, 98)
                     window_center = (p2 + p98) / 2
                     window_width = p98 - p2
                     logger.info(f"Auto-calculated window/level: {window_center}/{window_width}")
             
-            # Apply Rescale Slope/Intercept if present (for CT Hounsfield units)
-            if hasattr(ds, 'RescaleSlope') and hasattr(ds, 'RescaleIntercept'):
-                pixel_array = pixel_array * float(ds.RescaleSlope) + float(ds.RescaleIntercept)
-                logger.info(f"Applied rescale - new range: {pixel_array.min()} to {pixel_array.max()}")
+            # Apply window/level with high precision
+            img_array = self._apply_window_level_hq(pixel_array, window_center, window_width)
             
-            # Apply window/level
-            img_array = self._apply_window_level(pixel_array, window_center, window_width)
+            # Apply PhotometricInterpretation (handle inverted images)
+            if hasattr(ds, 'PhotometricInterpretation'):
+                if ds.PhotometricInterpretation == "MONOCHROME1":
+                    # Invert for MONOCHROME1 (lower values = brighter)
+                    img_array = 255 - img_array
             
-            # Convert to PIL Image
-            img = Image.fromarray(img_array.astype(np.uint8))
+            # Convert to uint16 first for better quality, then to uint8
+            img_array = np.clip(img_array, 0, 255).astype(np.uint8)
             
-            # Convert to RGB mode if grayscale
-            if img.mode != 'RGB':
-                img = img.convert('RGB')
+            # Create PIL Image
+            img = Image.fromarray(img_array, mode='L')  # Keep as grayscale
             
-            # Resize if needed (standardize to 512x512)
-            if img.size != (512, 512):
-                img = img.resize((512, 512), Image.LANCZOS)
+            # Get original dimensions
+            original_width, original_height = img.size
             
-            # Convert to base64
+            # Calculate aspect ratio preserving resize to 512x512 max
+            max_size = 768  # Increase from 512 for better quality
+            if original_width > original_height:
+                new_width = max_size
+                new_height = int((original_height / original_width) * max_size)
+            else:
+                new_height = max_size
+                new_width = int((original_width / original_height) * max_size)
+            
+            # Use high-quality resampling (Lanczos is best for downsampling)
+            if img.size != (new_width, new_height):
+                img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+            
+            # Convert to RGB for better browser compatibility
+            img = img.convert('RGB')
+            
+            # Save as PNG with maximum quality
             buffered = BytesIO()
-            img.save(buffered, format="PNG")
+            img.save(buffered, format="PNG", optimize=False, compress_level=1)  # Low compression = higher quality
             img_str = base64.b64encode(buffered.getvalue()).decode()
             
-            logger.info(f"Successfully converted slice {slice_index} to base64")
+            logger.info(f"Successfully converted slice {slice_index} to base64 (size: {new_width}x{new_height})")
             return f"data:image/png;base64,{img_str}"
             
         except Exception as e:
@@ -298,6 +317,38 @@ class DICOMProcessor:
             import traceback
             logger.error(traceback.format_exc())
             return None
+    
+    def _apply_window_level_hq(self, pixel_array: np.ndarray, center: float, width: float) -> np.ndarray:
+        """Apply window/level with high quality processing"""
+        # Handle different array shapes
+        if len(pixel_array.shape) == 3:
+            if pixel_array.shape[0] == 1:
+                pixel_array = pixel_array[0]
+            elif pixel_array.shape[2] == 3:
+                pixel_array = np.mean(pixel_array, axis=2)
+            else:
+                pixel_array = pixel_array[0]
+        
+        if len(pixel_array.shape) > 2:
+            pixel_array = pixel_array.reshape(pixel_array.shape[-2], pixel_array.shape[-1])
+        
+        # Calculate window bounds
+        img_min = center - width / 2.0
+        img_max = center + width / 2.0
+        
+        # Apply windowing with high precision
+        windowed = np.clip(pixel_array, img_min, img_max)
+        
+        # Normalize to 0-255 with high precision
+        if width > 0:
+            windowed = ((windowed - img_min) / width * 255.0)
+        else:
+            if windowed.max() > windowed.min():
+                windowed = ((windowed - windowed.min()) / (windowed.max() - windowed.min()) * 255.0)
+            else:
+                windowed = np.zeros_like(windowed)
+        
+        return windowed
     
     def _apply_window_level(self, pixel_array: np.ndarray, center: float, width: float) -> np.ndarray:
         """Apply window/level to pixel array"""
