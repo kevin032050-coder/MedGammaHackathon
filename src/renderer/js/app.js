@@ -1,6 +1,7 @@
 // Main Application Logic
 class RadiologyApp {
     constructor() {
+        console.log('RadiologyApp constructor called');
         this.currentStudy = null;
         this.currentSlice = 0;
         this.aiPriorityEnabled = true;
@@ -17,16 +18,26 @@ class RadiologyApp {
         console.log('Initializing MedGemma Radiology PACS...');
         
         // Initialize modules
+        console.log('Creating WorklistManager...');
         this.worklist = new WorklistManager(this);
+        
+        console.log('Creating DICOMViewer...');
         this.viewer = new DICOMViewer(this);
+        
+        console.log('Creating ChatManager...');
         this.chat = new ChatManager(this);
+        
+        console.log('Creating ReportManager...');
         this.report = new ReportManager(this);
+        
+        console.log('Creating VoiceManager...');
         this.voice = new VoiceManager(this);
         
         // Set up event listeners
+        console.log('Setting up event listeners...');
         this.setupEventListeners();
         
-        console.log('App initialized successfully');
+        console.log('✅ App initialized successfully');
     }
 
     setupEventListeners() {
