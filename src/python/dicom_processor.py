@@ -44,13 +44,19 @@ class DICOMProcessor:
             dicom_files = []
             for root, dirs, files in os.walk(folder_path):
                 for file in files:
+                    # Skip hidden files and common non-DICOM extensions
+                    if file.startswith('.') or file.endswith(('.txt', '.pdf', '.jpg', '.png')):
+                        continue
+                    
                     file_path = os.path.join(root, file)
                     try:
-                        # Try to read as DICOM
-                        ds = pydicom.dcmread(file_path, stop_before_pixels=True)
+                        # Try to read as DICOM (don't load pixels yet for speed)
+                        ds = pydicom.dcmread(file_path, stop_before_pixels=True, force=True)
                         dicom_files.append(file_path)
-                    except:
-                        continue  # Not a DICOM file
+                        logger.debug(f"Found DICOM: {file}")
+                    except Exception as e:
+                        logger.debug(f"Not a DICOM file: {file} - {str(e)}")
+                        continue
             
             if not dicom_files:
                 logger.warning(f"No DICOM files found in {folder_path}")
@@ -228,19 +234,26 @@ class DICOMProcessor:
         try:
             study = self.get_study(study_id)
             if not study.get('dicom_files') or slice_index >= len(study['dicom_files']):
+                logger.error(f"Invalid slice index: {slice_index}, available: {len(study.get('dicom_files', []))}")
                 return None
             
             file_path = study['dicom_files'][slice_index]
+            logger.info(f"Reading DICOM file: {file_path}")
             ds = pydicom.dcmread(file_path)
             
             # Get pixel array
             pixel_array = ds.pixel_array
+            logger.info(f"Pixel array shape: {pixel_array.shape}, dtype: {pixel_array.dtype}")
             
             # Apply window/level
             img_array = self._apply_window_level(pixel_array, window_center, window_width)
             
             # Convert to PIL Image
             img = Image.fromarray(img_array.astype(np.uint8))
+            
+            # Convert to RGB mode if grayscale
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
             
             # Resize if needed (standardize to 512x512)
             if img.size != (512, 512):
@@ -251,14 +264,33 @@ class DICOMProcessor:
             img.save(buffered, format="PNG")
             img_str = base64.b64encode(buffered.getvalue()).decode()
             
+            logger.info(f"Successfully converted slice {slice_index} to base64")
             return f"data:image/png;base64,{img_str}"
             
         except Exception as e:
             logger.error(f"Error getting slice image: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
             return None
     
     def _apply_window_level(self, pixel_array: np.ndarray, center: int, width: int) -> np.ndarray:
         """Apply window/level to pixel array"""
+        # Handle different array shapes
+        if len(pixel_array.shape) == 3:
+            # Multi-frame or color image - take first frame/channel
+            if pixel_array.shape[0] == 1:
+                pixel_array = pixel_array[0]  # Remove first dimension
+            elif pixel_array.shape[2] == 3:
+                # RGB image - convert to grayscale
+                pixel_array = np.mean(pixel_array, axis=2)
+            else:
+                # Take first frame
+                pixel_array = pixel_array[0]
+        
+        # Ensure 2D array
+        if len(pixel_array.shape) > 2:
+            pixel_array = pixel_array.reshape(pixel_array.shape[-2], pixel_array.shape[-1])
+        
         img_min = center - width // 2
         img_max = center + width // 2
         
@@ -266,7 +298,10 @@ class DICOMProcessor:
         windowed = np.clip(pixel_array, img_min, img_max)
         
         # Normalize to 0-255
-        windowed = ((windowed - img_min) / (img_max - img_min) * 255.0)
+        if img_max > img_min:
+            windowed = ((windowed - img_min) / (img_max - img_min) * 255.0)
+        else:
+            windowed = np.zeros_like(windowed)
         
         return windowed
     
