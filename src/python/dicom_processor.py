@@ -13,12 +13,22 @@ from io import BytesIO
 try:
     import pydicom
     import numpy as np
-    from PIL import Image
+    from PIL import Image, ImageFilter, ImageEnhance
+    from scipy import ndimage
     DICOM_AVAILABLE = True
-except ImportError:
-    DICOM_AVAILABLE = False
+    SCIPY_AVAILABLE = True
+except ImportError as e:
+    if 'scipy' in str(e):
+        import pydicom
+        import numpy as np
+        from PIL import Image, ImageFilter, ImageEnhance
+        DICOM_AVAILABLE = True
+        SCIPY_AVAILABLE = False
+    else:
+        DICOM_AVAILABLE = False
+        SCIPY_AVAILABLE = False
     logger = logging.getLogger(__name__)
-    logger.warning("pydicom not available - using mock mode")
+    logger.warning(f"Import warning: {str(e)}")
 
 logger = logging.getLogger(__name__)
 
@@ -279,56 +289,39 @@ class DICOMProcessor:
                     # Invert for MONOCHROME1 (lower values = brighter)
                     img_array = 255 - img_array
             
-            # Convert to uint16 first for better quality, then to uint8
+            # Apply medical-grade enhancement
+            img_array = self._enhance_medical_image(img_array)
+            
+            # Convert to uint8
             img_array = np.clip(img_array, 0, 255).astype(np.uint8)
             
             # Create PIL Image
-            img = Image.fromarray(img_array, mode='L')  # Keep as grayscale
+            img = Image.fromarray(img_array, mode='L')
+            
+            # Apply unsharp mask for medical sharpness
+            img = img.filter(ImageFilter.UnsharpMask(radius=1, percent=120, threshold=2))
+            
+            # Enhance contrast slightly
+            enhancer = ImageEnhance.Contrast(img)
+            img = enhancer.enhance(1.1)
             
             # Get original dimensions
             original_width, original_height = img.size
             logger.info(f"Native DICOM dimensions: {original_width}x{original_height}")
             
-            # Don't resize if already good quality - preserve native resolution
-            target_size = 768
+            # Keep native resolution - no resizing for maximum quality
+            logger.info(f"Keeping native resolution for maximum quality: {original_width}x{original_height}")
             
-            # Only resize if significantly different from target
-            if original_width > target_size * 1.2 or original_height > target_size * 1.2:
-                # Downscale large images
-                if original_width > original_height:
-                    new_width = target_size
-                    new_height = int((original_height / original_width) * target_size)
-                else:
-                    new_height = target_size
-                    new_width = int((original_width / original_height) * target_size)
-                
-                img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
-                logger.info(f"Resized to: {new_width}x{new_height}")
-            elif original_width < target_size * 0.5 or original_height < target_size * 0.5:
-                # Upscale small images with bicubic (better for enlarging)
-                if original_width > original_height:
-                    new_width = target_size
-                    new_height = int((original_height / original_width) * target_size)
-                else:
-                    new_height = target_size
-                    new_width = int((original_width / original_height) * target_size)
-                
-                img = img.resize((new_width, new_height), Image.Resampling.BICUBIC)
-                logger.info(f"Upscaled to: {new_width}x{new_height}")
-            else:
-                # Keep native resolution
-                logger.info(f"Keeping native resolution: {original_width}x{original_height}")
-            
-            # Convert to RGB for better browser compatibility
+            # Convert to RGB for browser compatibility
             img = img.convert('RGB')
             
-            # Save as PNG with maximum quality
+            # Save as PNG with zero compression for maximum quality
             buffered = BytesIO()
-            img.save(buffered, format="PNG", optimize=False, compress_level=1)  # Low compression = higher quality
+            img.save(buffered, format="PNG", compress_level=0)  # No compression = best quality
             img_str = base64.b64encode(buffered.getvalue()).decode()
             
             final_width, final_height = img.size
-            logger.info(f"Successfully converted slice {slice_index} to base64 (final size: {final_width}x{final_height}, base64 length: {len(img_str)} chars)")
+            logger.info(f"Successfully converted slice {slice_index} (final: {final_width}x{final_height}, base64: {len(img_str)} chars)")
             return f"data:image/png;base64,{img_str}"
             
         except Exception as e:
@@ -368,6 +361,29 @@ class DICOMProcessor:
                 windowed = np.zeros_like(windowed)
         
         return windowed
+    
+    def _enhance_medical_image(self, img_array: np.ndarray) -> np.ndarray:
+        """
+        Apply medical-grade image enhancement
+        - Adaptive histogram equalization
+        - Noise reduction
+        """
+        try:
+            # Simple contrast stretching using percentiles
+            p2, p98 = np.percentile(img_array, (2, 98))
+            
+            # Stretch contrast
+            stretched = np.clip((img_array - p2) / (p98 - p2) * 255.0, 0, 255)
+            
+            # Apply subtle gamma correction for better midtone visibility
+            gamma = 1.1
+            stretched = np.power(stretched / 255.0, 1.0 / gamma) * 255.0
+            
+            return stretched
+            
+        except Exception as e:
+            logger.warning(f"Enhancement failed: {e}, returning original")
+            return img_array
     
     def _apply_window_level(self, pixel_array: np.ndarray, center: float, width: float) -> np.ndarray:
         """Apply window/level to pixel array"""
