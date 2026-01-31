@@ -40,11 +40,46 @@ class DICOMViewer {
             });
             console.log('DWV App configured');
 
-            // Listen for ALL events
-            this.dwvApp.addEventListener('load', (event) => {
-                console.log('✅ DWV LOAD EVENT:', event);
-                this.dwvApp.setTool('Scroll');
-                setTimeout(() => this.applyWindowPreset(this.currentPreset), 200);
+            // Listen for load complete - THIS IS KEY
+            this.dwvApp.addEventListener('loadend', (event) => {
+                console.log('✅ DWV LOADEND - All files loaded!');
+                
+                // Get the actual number of slices from DWV
+                const dataIds = this.dwvApp.getDataIds();
+                console.log('Data IDs:', dataIds);
+                
+                if (dataIds.length > 0) {
+                    const dataId = dataIds[0];
+                    const layerGroup = this.dwvApp.getLayerGroupByDataId(dataId);
+                    const viewLayer = layerGroup.getActiveViewLayer();
+                    const viewController = viewLayer.getViewController();
+                    
+                    // Get image size
+                    const image = this.dwvApp.getImage(dataId);
+                    const geometry = image.getGeometry();
+                    const size = geometry.getSize();
+                    const numberOfSlices = size.get(2); // Z dimension
+                    
+                    console.log('Image loaded - slices:', numberOfSlices);
+                    
+                    // Update slider
+                    this.slider.disabled = false;
+                    this.slider.min = 0;
+                    this.slider.max = numberOfSlices - 1;
+                    this.slider.value = 0;
+                    this.updateSliceInfo(0);
+                    
+                    // Set grayscale color map
+                    viewController.setColourMap('plain');
+                    
+                    // Set scroll tool
+                    this.dwvApp.setTool('Scroll');
+                    
+                    // Apply window preset
+                    setTimeout(() => this.applyWindowPreset(this.currentPreset), 200);
+                    
+                    this.app.showToast(`Loaded ${numberOfSlices} slices successfully!`, 'success');
+                }
             });
             
             this.dwvApp.addEventListener('loadstart', (event) => {
@@ -55,13 +90,8 @@ class DICOMViewer {
                 console.log('⏳ DWV PROGRESS:', event.loaded, '/', event.total);
             });
             
-            this.dwvApp.addEventListener('loadend', (event) => {
-                console.log('✅ DWV LOADEND:', event);
-                this.app.showToast('DICOM files loaded successfully!', 'success');
-            });
-            
-            this.dwvApp.addEventListener('loaditem', (event) => {
-                console.log('📄 DWV LOADITEM:', event);
+            this.dwvApp.addEventListener('load', (event) => {
+                console.log('📄 DWV LOAD:', event);
             });
 
             this.dwvApp.addEventListener('positionchange', (event) => {
@@ -162,23 +192,19 @@ class DICOMViewer {
             console.log('Created', files.length, 'File objects');
             
             // Reset DWV before loading
-            this.dwvApp.reset();
+            if (this.dwvApp) {
+                this.dwvApp.reset();
+            }
             
             // Load DICOM files with DWV using File objects
             console.log('Loading files into DWV...');
             this.dwvApp.loadFiles(files);
 
-            // Configure slider
-            const numSlices = study.num_slices;
-            this.slider.disabled = false;
-            this.slider.min = 0;
-            this.slider.max = numSlices - 1;
-            this.slider.value = 0;
-
+            // Don't configure slider here - wait for loadend event
             // Hide empty state
             document.querySelector('.empty-viewer').style.display = 'none';
 
-            console.log(`DWV loading ${numSlices} slices...`);
+            console.log(`DWV loading ${study.num_slices} slices...`);
             this.app.showToast('Loading DICOM files...', 'info');
             
         } catch (error) {
