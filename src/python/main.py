@@ -55,6 +55,12 @@ class FeedbackRequest(BaseModel):
     agreed: bool
     correction: Optional[str] = None
 
+class GetSliceImageRequest(BaseModel):
+    study_id: str
+    slice_index: int
+    window_center: Optional[int] = 40
+    window_width: Optional[int] = 80
+
 # API Endpoints
 @app.get("/health")
 async def health_check():
@@ -199,6 +205,27 @@ async def submit_feedback(request: FeedbackRequest):
         }
     except Exception as e:
         logger.error(f"Error submitting feedback: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/get-slice-image")
+async def get_slice_image(request: GetSliceImageRequest):
+    """Get slice image as base64 for display"""
+    try:
+        logger.info(f"Getting slice image: study={request.study_id}, slice={request.slice_index}")
+        
+        image_data = dicom_processor.get_slice_image(
+            request.study_id, 
+            request.slice_index,
+            request.window_center,
+            request.window_width
+        )
+        
+        return {
+            "success": True,
+            "image_data": image_data
+        }
+    except Exception as e:
+        logger.error(f"Error getting slice image: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.on_event("startup")

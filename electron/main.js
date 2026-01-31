@@ -186,6 +186,21 @@ ipcMain.handle('submit-feedback', async (event, feedbackData) => {
     }
 });
 
+ipcMain.handle('get-slice-image', async (event, studyId, sliceIndex, windowCenter, windowWidth) => {
+    try {
+        const response = await axios.post(`http://localhost:${PYTHON_PORT}/api/get-slice-image`, {
+            study_id: studyId,
+            slice_index: sliceIndex,
+            window_center: windowCenter || 40,
+            window_width: windowWidth || 80
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Error getting slice image:', error);
+        throw error;
+    }
+});
+
 // App lifecycle
 app.whenReady().then(async () => {
     try {

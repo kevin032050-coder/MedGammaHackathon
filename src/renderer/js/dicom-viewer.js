@@ -79,7 +79,29 @@ class DICOMViewer {
         this.ctx.fillStyle = '#0a0a0a';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-        // Generate simulated CT appearance
+        // Try to load real DICOM image
+        try {
+            const response = await window.electronAPI.getSliceImage(
+                this.app.currentStudy.study_id,
+                sliceIndex,
+                40, // window center
+                80  // window width
+            );
+
+            if (response.success && response.image_data) {
+                // Load image from base64
+                const img = new Image();
+                img.onload = () => {
+                    this.ctx.drawImage(img, 0, 0, this.canvas.width, this.canvas.height);
+                };
+                img.src = response.image_data;
+                return;
+            }
+        } catch (error) {
+            console.error('Error loading DICOM image:', error);
+        }
+
+        // Fallback to simulated CT if real image fails
         this.generateSimulatedCT(sliceIndex);
     }
 

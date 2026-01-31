@@ -7,11 +7,18 @@ import os
 import logging
 from typing import Dict, List, Any, Optional
 import asyncio
+import base64
+from io import BytesIO
 
-# DICOM libraries will be imported when available
-# import pydicom
-# from PIL import Image
-# import numpy as np
+try:
+    import pydicom
+    import numpy as np
+    from PIL import Image
+    DICOM_AVAILABLE = True
+except ImportError:
+    DICOM_AVAILABLE = False
+    logger = logging.getLogger(__name__)
+    logger.warning("pydicom not available - using mock mode")
 
 logger = logging.getLogger(__name__)
 
@@ -30,44 +37,77 @@ class DICOMProcessor:
         logger.info(f"Loading DICOM study from: {folder_path}")
         
         try:
-            # TODO: Implement actual DICOM loading with pydicom
-            # Steps:
-            # 1. Scan folder for DICOM files
-            # 2. Read DICOM metadata
-            # 3. Extract pixel data
-            # 4. Convert to viewable format (PNG/base64)
-            # 5. Sort slices
+            if not DICOM_AVAILABLE:
+                return await self._load_mock_study(folder_path)
             
-            # Mock implementation for now
-            await asyncio.sleep(0.5)  # Simulate loading time
+            # Scan folder for DICOM files
+            dicom_files = []
+            for root, dirs, files in os.walk(folder_path):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    try:
+                        # Try to read as DICOM
+                        ds = pydicom.dcmread(file_path, stop_before_pixels=True)
+                        dicom_files.append(file_path)
+                    except:
+                        continue  # Not a DICOM file
+            
+            if not dicom_files:
+                logger.warning(f"No DICOM files found in {folder_path}")
+                return await self._load_mock_study(folder_path)
+            
+            logger.info(f"Found {len(dicom_files)} DICOM files")
+            
+            # Read first file for metadata
+            first_ds = pydicom.dcmread(dicom_files[0], stop_before_pixels=True)
+            
+            # Sort files by Instance Number or Slice Location
+            sorted_files = []
+            for file_path in dicom_files:
+                ds = pydicom.dcmread(file_path, stop_before_pixels=True)
+                instance_number = getattr(ds, 'InstanceNumber', 0)
+                slice_location = getattr(ds, 'SliceLocation', 0)
+                sorted_files.append((instance_number, slice_location, file_path))
+            
+            sorted_files.sort(key=lambda x: (x[0], x[1]))
+            sorted_file_paths = [f[2] for f in sorted_files]
             
             self.study_counter += 1
             study_id = f"STUDY_{self.study_counter:03d}"
             
-            # Create mock study data
+            # Extract metadata
+            patient_name = str(getattr(first_ds, 'PatientName', 'UNKNOWN')).replace('^', ', ')
+            patient_age = str(getattr(first_ds, 'PatientAge', 'N/A')).replace('Y', '')
+            patient_sex = str(getattr(first_ds, 'PatientSex', 'U'))
+            study_date = str(getattr(first_ds, 'StudyDate', 'N/A'))
+            study_time = str(getattr(first_ds, 'StudyTime', 'N/A'))[:6]
+            modality = str(getattr(first_ds, 'Modality', 'CT'))
+            body_part = str(getattr(first_ds, 'BodyPartExamined', 'HEAD'))
+            
             study_data = {
                 "study_id": study_id,
                 "folder_path": folder_path,
+                "dicom_files": sorted_file_paths,
                 "patient": {
-                    "id": "12345678",
-                    "name": "DOE, JOHN",
-                    "age": 45,
-                    "sex": "M"
+                    "id": str(getattr(first_ds, 'PatientID', 'UNKNOWN')),
+                    "name": patient_name,
+                    "age": int(patient_age) if patient_age.isdigit() else 0,
+                    "sex": patient_sex
                 },
                 "study_info": {
-                    "study_date": "2024-01-15",
-                    "study_time": "14:30:00",
-                    "modality": "CT",
-                    "body_part": "HEAD",
-                    "protocol": "Trauma Protocol"
+                    "study_date": study_date,
+                    "study_time": study_time,
+                    "modality": modality,
+                    "body_part": body_part,
+                    "protocol": str(getattr(first_ds, 'StudyDescription', 'Unknown Protocol'))
                 },
                 "series": [
                     {
-                        "series_id": "S001",
-                        "series_description": "Axial CT Head",
-                        "num_slices": 40,
-                        "slice_thickness": 5.0,
-                        "pixel_spacing": [0.5, 0.5]
+                        "series_id": str(getattr(first_ds, 'SeriesNumber', '1')),
+                        "series_description": str(getattr(first_ds, 'SeriesDescription', 'Axial')),
+                        "num_slices": len(sorted_file_paths),
+                        "slice_thickness": float(getattr(first_ds, 'SliceThickness', 5.0)),
+                        "pixel_spacing": list(getattr(first_ds, 'PixelSpacing', [0.5, 0.5]))
                     }
                 ],
                 "clinical_context": {
@@ -78,7 +118,7 @@ class DICOMProcessor:
                         "hr": 88
                     }
                 },
-                "num_slices": 40
+                "num_slices": len(sorted_file_paths)
             }
             
             # Store study
@@ -90,6 +130,53 @@ class DICOMProcessor:
         except Exception as e:
             logger.error(f"Error loading DICOM study: {str(e)}")
             raise
+    
+    async def _load_mock_study(self, folder_path: str) -> Dict[str, Any]:
+        """Load mock study when DICOM libraries not available"""
+        await asyncio.sleep(0.5)
+        
+        self.study_counter += 1
+        study_id = f"STUDY_{self.study_counter:03d}"
+        
+        study_data = {
+            "study_id": study_id,
+            "folder_path": folder_path,
+            "dicom_files": [],
+            "patient": {
+                "id": "12345678",
+                "name": "DOE, JOHN",
+                "age": 45,
+                "sex": "M"
+            },
+            "study_info": {
+                "study_date": "2024-01-15",
+                "study_time": "14:30:00",
+                "modality": "CT",
+                "body_part": "HEAD",
+                "protocol": "Trauma Protocol"
+            },
+            "series": [
+                {
+                    "series_id": "S001",
+                    "series_description": "Axial CT Head",
+                    "num_slices": 40,
+                    "slice_thickness": 5.0,
+                    "pixel_spacing": [0.5, 0.5]
+                }
+            ],
+            "clinical_context": {
+                "indication": "Head trauma",
+                "vitals": {
+                    "gcs": 14,
+                    "bp": "140/90",
+                    "hr": 88
+                }
+            },
+            "num_slices": 40
+        }
+        
+        self.studies[study_id] = study_data
+        return study_data
     
     def get_study(self, study_id: str) -> Dict[str, Any]:
         """Get loaded study data"""
@@ -135,9 +222,53 @@ class DICOMProcessor:
         """
         Get slice image as base64 string for display
         """
-        # TODO: Implement actual image retrieval
-        # For now, return placeholder
-        return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+        if not DICOM_AVAILABLE:
+            return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+        
+        try:
+            study = self.get_study(study_id)
+            if not study.get('dicom_files') or slice_index >= len(study['dicom_files']):
+                return None
+            
+            file_path = study['dicom_files'][slice_index]
+            ds = pydicom.dcmread(file_path)
+            
+            # Get pixel array
+            pixel_array = ds.pixel_array
+            
+            # Apply window/level
+            img_array = self._apply_window_level(pixel_array, window_center, window_width)
+            
+            # Convert to PIL Image
+            img = Image.fromarray(img_array.astype(np.uint8))
+            
+            # Resize if needed (standardize to 512x512)
+            if img.size != (512, 512):
+                img = img.resize((512, 512), Image.LANCZOS)
+            
+            # Convert to base64
+            buffered = BytesIO()
+            img.save(buffered, format="PNG")
+            img_str = base64.b64encode(buffered.getvalue()).decode()
+            
+            return f"data:image/png;base64,{img_str}"
+            
+        except Exception as e:
+            logger.error(f"Error getting slice image: {str(e)}")
+            return None
+    
+    def _apply_window_level(self, pixel_array: np.ndarray, center: int, width: int) -> np.ndarray:
+        """Apply window/level to pixel array"""
+        img_min = center - width // 2
+        img_max = center + width // 2
+        
+        # Clip values
+        windowed = np.clip(pixel_array, img_min, img_max)
+        
+        # Normalize to 0-255
+        windowed = ((windowed - img_min) / (img_max - img_min) * 255.0)
+        
+        return windowed
     
     def extract_metadata(self, dicom_file_path: str) -> Dict[str, Any]:
         """Extract metadata from DICOM file"""
