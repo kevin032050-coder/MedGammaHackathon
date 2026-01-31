@@ -1,45 +1,63 @@
 // DICOM Viewer with DWV
-import * as dwv from '../../../node_modules/dwv/dist/dwv.mjs';
-
 class DICOMViewer {
     constructor(app) {
         this.app = app;
         this.dwvApp = null;
         this.slider = document.getElementById('slice-slider');
         this.currentPreset = 'brain';
+        this.isInitialized = false;
         
         this.setupEventListeners();
-        this.initDWV();
     }
 
-    initDWV() {
-        // Initialize DWV application
-        this.dwvApp = new dwv.App();
-        
-        // Configure DWV
-        this.dwvApp.init({
-            dataViewConfigs: {'*': [{divId: 'dwv-layer'}]},
-            tools: {
-                Scroll: {},
-                ZoomAndPan: {},
-                WindowLevel: {presets: this.getWindowPresets()}
-            }
-        });
+    async initDWV() {
+        if (this.isInitialized) return;
 
-        // Set initial tool
-        this.dwvApp.addEventListener('load', () => {
-            console.log('DWV loaded successfully');
-            this.dwvApp.setTool('Scroll');
-        });
+        try {
+            // Dynamically import DWV
+            const dwvModule = await import('../../../node_modules/dwv/dist/dwv.mjs');
+            const dwv = dwvModule;
+            
+            // Initialize DWV application
+            this.dwvApp = new dwv.App();
+            
+            // Configure DWV
+            this.dwvApp.init({
+                dataViewConfigs: {'*': [{divId: 'dwv-layer'}]},
+                tools: {
+                    Scroll: {},
+                    ZoomAndPan: {},
+                    WindowLevel: {}
+                }
+            });
 
-        // Handle slice change
-        this.dwvApp.addEventListener('positionchange', (event) => {
-            const position = event.value[2]; // Z position (slice)
-            if (position !== undefined) {
-                this.slider.value = position;
-                this.updateSliceInfo(position);
-            }
-        });
+            // Set initial tool
+            this.dwvApp.addEventListener('load', () => {
+                console.log('DWV loaded successfully');
+                this.dwvApp.setTool('Scroll');
+                
+                // Apply window preset after load
+                setTimeout(() => {
+                    this.applyWindowPreset(this.currentPreset);
+                }, 100);
+            });
+
+            // Handle slice change
+            this.dwvApp.addEventListener('positionchange', (event) => {
+                const position = event.value[2]; // Z position (slice)
+                if (position !== undefined) {
+                    this.slider.value = position;
+                    this.updateSliceInfo(position);
+                }
+            });
+
+            this.isInitialized = true;
+            console.log('DWV initialized successfully');
+            
+        } catch (error) {
+            console.error('Error initializing DWV:', error);
+            throw error;
+        }
     }
 
     getWindowPresets() {
@@ -95,11 +113,20 @@ class DICOMViewer {
         }
 
         try {
+            // Initialize DWV if not done yet
+            await this.initDWV();
+            
             // Get DICOM file URLs from backend
-            const fileUrls = await this.getDicomUrls(study.study_id);
+            const response = await this.getDicomUrls(study.study_id);
+            console.log('DICOM URLs:', response);
+            
+            if (!response.success || !response.urls || response.urls.length === 0) {
+                throw new Error('No URLs returned from backend');
+            }
             
             // Load DICOM files with DWV
-            await this.dwvApp.loadURLs(fileUrls);
+            console.log('Loading URLs into DWV:', response.urls);
+            await this.dwvApp.loadURLs(response.urls);
 
             // Configure slider
             const numSlices = study.num_slices;
@@ -111,41 +138,44 @@ class DICOMViewer {
             // Hide empty state
             document.querySelector('.empty-viewer').style.display = 'none';
 
-            // Apply default window preset
-            this.applyWindowPreset(this.currentPreset);
-
             console.log(`DWV loaded ${numSlices} slices`);
             
         } catch (error) {
             console.error('Error loading study with DWV:', error);
-            this.app.showToast('Error loading DICOM files', 'error');
+            this.app.showToast('Error loading DICOM files: ' + error.message, 'error');
         }
     }
 
     async getDicomUrls(studyId) {
         // Get DICOM file URLs from backend
         const response = await window.electronAPI.getDicomUrls(studyId);
-        if (response.success) {
-            return response.urls;
-        }
-        throw new Error('Failed to get DICOM URLs');
+        return response;
     }
 
     goToSlice(sliceIndex) {
-        if (!this.dwvApp || !this.app.currentStudy) return;
+        if (!this.dwvApp || !this.app.currentStudy || !this.isInitialized) return;
 
         const numSlices = this.app.currentStudy.num_slices;
         if (sliceIndex < 0 || sliceIndex >= numSlices) return;
 
-        // Set position in DWV (position is [x, y, z])
-        const currentPos = this.dwvApp.getActiveLayerGroup().getActiveViewLayer().getViewController().getPosition();
-        this.dwvApp.getActiveLayerGroup().getActiveViewLayer().getViewController().setPosition(
-            new dwv.math.Index([currentPos[0], currentPos[1], sliceIndex])
-        );
+        try {
+            // Get current position
+            const viewController = this.dwvApp.getActiveLayerGroup().getActiveViewLayer().getViewController();
+            const currentPos = viewController.getPosition();
+            
+            // Create new position with updated slice
+            const dwvModule = window.dwv;
+            const newPos = new dwvModule.math.Index([currentPos[0], currentPos[1], sliceIndex]);
+            
+            // Set new position
+            viewController.setPosition(newPos);
 
-        this.slider.value = sliceIndex;
-        this.app.currentSlice = sliceIndex;
-        this.updateSliceInfo(sliceIndex);
+            this.slider.value = sliceIndex;
+            this.app.currentSlice = sliceIndex;
+            this.updateSliceInfo(sliceIndex);
+        } catch (error) {
+            console.error('Error changing slice:', error);
+        }
     }
 
     updateSliceInfo(sliceIndex) {
@@ -154,7 +184,7 @@ class DICOMViewer {
     }
 
     applyWindowPreset(presetName) {
-        if (!this.dwvApp) return;
+        if (!this.dwvApp || !this.isInitialized) return;
 
         const presets = this.getWindowPresets();
         const preset = presets[presetName];
@@ -162,19 +192,19 @@ class DICOMViewer {
         if (preset) {
             console.log(`Applying preset: ${presetName} (C=${preset.center}, W=${preset.width})`);
             
-            // Apply window level to DWV
-            const viewController = this.dwvApp.getActiveLayerGroup().getActiveViewLayer().getViewController();
-            viewController.setWindowLevel(preset.center, preset.width);
+            try {
+                // Apply window level to DWV
+                const viewController = this.dwvApp.getActiveLayerGroup().getActiveViewLayer().getViewController();
+                viewController.setWindowLevel(preset.center, preset.width);
+            } catch (error) {
+                console.error('Error applying window preset:', error);
+            }
         }
     }
 
     toggleOverlay(enabled) {
         // AI overlay will be handled separately
         console.log('AI overlay toggle:', enabled);
-    }
-
-    generateSimulatedCT(sliceIndex) {
-        // Not needed with DWV - it handles everything
     }
 }
 
