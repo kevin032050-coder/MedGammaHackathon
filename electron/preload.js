@@ -26,6 +26,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     submitFeedback: (feedbackData) => ipcRenderer.invoke('submit-feedback', feedbackData),
     
     // Get slice image
-    getSliceImage: (studyId, sliceIndex, windowCenter, windowWidth) => 
-        ipcRenderer.invoke('get-slice-image', studyId, sliceIndex, windowCenter, windowWidth)
+    getSliceImage: (studyId, sliceIndex, windowCenter, windowWidth, windowPreset) => 
+        ipcRenderer.invoke('get-slice-image', studyId, sliceIndex, windowCenter, windowWidth, windowPreset)
 });

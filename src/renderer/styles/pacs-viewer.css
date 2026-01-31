@@ -7,6 +7,7 @@
     justify-content: space-between;
     align-items: center;
     gap: 16px;
+    flex-wrap: wrap;
 }
 
 .control-group {
@@ -20,6 +21,33 @@
     display: flex;
     align-items: center;
     gap: 6px;
+}
+
+.window-presets {
+    display: flex;
+    gap: 4px;
+}
+
+.preset-btn {
+    padding: 4px 12px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-panel);
+    color: var(--text-secondary);
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.preset-btn:hover {
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+}
+
+.preset-btn.active {
+    background: var(--accent-primary);
+    color: white;
+    border-color: var(--accent-primary);
 }
 
 .zoom-controls {

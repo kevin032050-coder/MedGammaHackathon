@@ -211,13 +211,14 @@ async def submit_feedback(request: FeedbackRequest):
 async def get_slice_image(request: GetSliceImageRequest):
     """Get slice image as base64 for display"""
     try:
-        logger.info(f"Getting slice image: study={request.study_id}, slice={request.slice_index}")
+        logger.info(f"Getting slice image: study={request.study_id}, slice={request.slice_index}, preset={request.window_preset}")
         
         image_data = dicom_processor.get_slice_image(
             request.study_id, 
             request.slice_index,
             request.window_center,
-            request.window_width
+            request.window_width,
+            request.window_preset
         )
         
         return {

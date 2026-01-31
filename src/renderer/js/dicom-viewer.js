@@ -17,6 +17,7 @@ class DICOMViewer {
         this.lastMouseX = 0;
         this.lastMouseY = 0;
         this.currentImage = null;
+        this.currentPreset = 'brain';  // Default preset
         
         this.setupEventListeners();
     }
@@ -24,6 +25,19 @@ class DICOMViewer {
     setupEventListeners() {
         this.slider.addEventListener('input', (e) => {
             this.goToSlice(parseInt(e.target.value));
+        });
+
+        // Window preset buttons
+        document.querySelectorAll('.preset-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                // Update active state
+                document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                
+                // Set preset and reload
+                this.currentPreset = e.target.dataset.preset;
+                this.goToSlice(this.app.currentSlice);
+            });
         });
 
         // Keyboard navigation
@@ -207,8 +221,9 @@ class DICOMViewer {
             const response = await window.electronAPI.getSliceImage(
                 this.app.currentStudy.study_id,
                 sliceIndex,
-                null, // Let backend auto-calculate window center
-                null  // Let backend auto-calculate window width
+                null, // window center
+                null, // window width  
+                this.currentPreset // Use current preset
             );
 
             if (response.success && response.image_data) {

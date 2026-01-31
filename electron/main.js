@@ -186,13 +186,14 @@ ipcMain.handle('submit-feedback', async (event, feedbackData) => {
     }
 });
 
-ipcMain.handle('get-slice-image', async (event, studyId, sliceIndex, windowCenter, windowWidth) => {
+ipcMain.handle('get-slice-image', async (event, studyId, sliceIndex, windowCenter, windowWidth, windowPreset) => {
     try {
         const response = await axios.post(`http://localhost:${PYTHON_PORT}/api/get-slice-image`, {
             study_id: studyId,
             slice_index: sliceIndex,
-            window_center: windowCenter || 40,
-            window_width: windowWidth || 80
+            window_center: windowCenter,
+            window_width: windowWidth,
+            window_preset: windowPreset
         });
         return response.data;
     } catch (error) {

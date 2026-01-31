@@ -35,6 +35,17 @@ logger = logging.getLogger(__name__)
 class DICOMProcessor:
     """Handles DICOM file operations"""
     
+    # CT Window Presets (Hounsfield Units)
+    WINDOW_PRESETS = {
+        'brain': {'center': 40, 'width': 80},
+        'subdural': {'center': 80, 'width': 200},
+        'bone': {'center': 400, 'width': 1800},
+        'lung': {'center': -600, 'width': 1500},
+        'abdomen': {'center': 40, 'width': 400},
+        'liver': {'center': 30, 'width': 150},
+        'mediastinum': {'center': 50, 'width': 350}
+    }
+    
     def __init__(self):
         self.studies = {}  # In-memory storage for loaded studies
         self.study_counter = 0
@@ -234,7 +245,90 @@ class DICOMProcessor:
         # 4. Return as base64 or bytes
         pass
     
-    def get_slice_image(self, study_id: str, slice_index: int, window_center: int = None, window_width: int = None) -> str:
+    def get_slice_image(self, study_id: str, slice_index: int, window_center: int = None, window_width: int = None, window_preset: str = None) -> str:
+        """
+        Get slice image as base64 string for display - HIGH QUALITY
+        """
+        if not DICOM_AVAILABLE:
+            return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+        
+        try:
+            study = self.get_study(study_id)
+            if not study.get('dicom_files') or slice_index >= len(study['dicom_files']):
+                logger.error(f"Invalid slice index: {slice_index}, available: {len(study.get('dicom_files', []))}")
+                return None
+            
+            file_path = study['dicom_files'][slice_index]
+            ds = pydicom.dcmread(file_path)
+            
+            # Get pixel array with proper data type
+            pixel_array = ds.pixel_array.astype(np.float64)
+            original_shape = pixel_array.shape
+            logger.info(f"Original pixel array shape: {original_shape}, dtype: {pixel_array.dtype}")
+            logger.info(f"Pixel value range: {pixel_array.min()} to {pixel_array.max()}")
+            
+            # Apply Rescale Slope/Intercept (convert to Hounsfield Units for CT)
+            if hasattr(ds, 'RescaleSlope') and hasattr(ds, 'RescaleIntercept'):
+                pixel_array = pixel_array * float(ds.RescaleSlope) + float(ds.RescaleIntercept)
+                logger.info(f"Applied rescale - HU range: {pixel_array.min()} to {pixel_array.max()}")
+            
+            # Determine window/level
+            if window_preset and window_preset in self.WINDOW_PRESETS:
+                # Use preset
+                preset = self.WINDOW_PRESETS[window_preset]
+                window_center = preset['center']
+                window_width = preset['width']
+                logger.info(f"Using preset '{window_preset}': C={window_center}, W={window_width}")
+            elif window_center is None or window_width is None:
+                # Try DICOM tags or use brain preset as default for head CT
+                if hasattr(ds, 'WindowCenter') and hasattr(ds, 'WindowWidth'):
+                    if isinstance(ds.WindowCenter, (list, pydicom.multival.MultiValue)):
+                        window_center = float(ds.WindowCenter[0])
+                        window_width = float(ds.WindowWidth[0])
+                    else:
+                        window_center = float(ds.WindowCenter)
+                        window_width = float(ds.WindowWidth)
+                    logger.info(f"Using DICOM tags: C={window_center}, W={window_width}")
+                else:
+                    # Default to brain window for head CT
+                    window_center = 40
+                    window_width = 80
+                    logger.info(f"Using default brain window: C={window_center}, W={window_width}")
+            
+            # Apply window/level (no enhancement, pure windowing)
+            img_array = self._apply_window_level_clean(pixel_array, window_center, window_width)
+            
+            # Apply PhotometricInterpretation
+            if hasattr(ds, 'PhotometricInterpretation'):
+                if ds.PhotometricInterpretation == "MONOCHROME1":
+                    img_array = 255 - img_array
+            
+            # Convert to uint8
+            img_array = np.clip(img_array, 0, 255).astype(np.uint8)
+            
+            # Create PIL Image - NO FILTERS, NO ENHANCEMENT
+            img = Image.fromarray(img_array, mode='L')
+            
+            # Keep native resolution
+            original_width, original_height = img.size
+            logger.info(f"Native resolution: {original_width}x{original_height}")
+            
+            # Convert to RGB
+            img = img.convert('RGB')
+            
+            # Save as PNG with zero compression
+            buffered = BytesIO()
+            img.save(buffered, format="PNG", compress_level=0)
+            img_str = base64.b64encode(buffered.getvalue()).decode()
+            
+            logger.info(f"Slice {slice_index} converted (W/L: {window_center}/{window_width})")
+            return f"data:image/png;base64,{img_str}"
+            
+        except Exception as e:
+            logger.error(f"Error getting slice image: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return None
         """
         Get slice image as base64 string for display - HIGH QUALITY
         """
@@ -330,7 +424,34 @@ class DICOMProcessor:
             logger.error(traceback.format_exc())
             return None
     
-    def _apply_window_level_hq(self, pixel_array: np.ndarray, center: float, width: float) -> np.ndarray:
+    def _apply_window_level_clean(self, pixel_array: np.ndarray, center: float, width: float) -> np.ndarray:
+        """Apply window/level with NO enhancements - pure medical windowing"""
+        # Handle multi-dimensional arrays
+        if len(pixel_array.shape) == 3:
+            if pixel_array.shape[0] == 1:
+                pixel_array = pixel_array[0]
+            elif pixel_array.shape[2] == 3:
+                pixel_array = np.mean(pixel_array, axis=2)
+            else:
+                pixel_array = pixel_array[0]
+        
+        if len(pixel_array.shape) > 2:
+            pixel_array = pixel_array.reshape(pixel_array.shape[-2], pixel_array.shape[-1])
+        
+        # Standard DICOM windowing formula
+        img_min = center - width / 2.0
+        img_max = center + width / 2.0
+        
+        # Clip to window
+        windowed = np.clip(pixel_array, img_min, img_max)
+        
+        # Linear scaling to 0-255
+        if width > 0:
+            windowed = ((windowed - img_min) / width) * 255.0
+        else:
+            windowed = np.zeros_like(windowed)
+        
+        return windowed
         """Apply window/level with high quality processing"""
         # Handle different array shapes
         if len(pixel_array.shape) == 3:
