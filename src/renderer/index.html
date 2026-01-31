@@ -9,14 +9,6 @@
     <link rel="stylesheet" href="styles/worklist.css">
     <link rel="stylesheet" href="styles/report.css">
     
-    <!-- DWV Library -->
-    <script>
-        console.log('Loading DWV from:', '../../node_modules/dwv/dist/dwv.min.js');
-    </script>
-    <script src="../../node_modules/dwv/dist/dwv.min.js"></script>
-    <script>
-        console.log('DWV loaded, global dwv:', typeof dwv);
-    </script>
 </head>
 <body>
     <!-- Disclaimer Banner -->
@@ -92,7 +84,7 @@
             </div>
 
             <div class="viewer-container">
-                <div id="dwv-layer" class="dwv-layer"></div>
+                <canvas id="image-canvas"></canvas>
                 
                 <svg id="overlay-canvas" class="overlay-svg">
                     <!-- AI overlays will be drawn here -->
@@ -227,47 +219,11 @@
     <div id="toast-container" class="toast-container"></div>
 
     <!-- Scripts - Load dependencies first -->
-    <script>
-        console.log('Starting script load...');
-    </script>
-    <script src="js/dicom-viewer-new.js"></script>
-    <script>
-        console.log('dicom-viewer.js loaded, DICOMViewer:', typeof DICOMViewer);
-    </script>
+    <script src="js/dicom-viewer-canvas.js"></script>
     <script src="js/worklist.js"></script>
-    <script>
-        console.log('worklist.js loaded, WorklistManager:', typeof WorklistManager);
-    </script>
     <script src="js/chat.js"></script>
     <script src="js/report.js"></script>
     <script src="js/voice.js"></script>
     <script src="js/app.js"></script>
-    <script>
-        console.log('app.js loaded, RadiologyApp:', typeof RadiologyApp);
-    </script>
-    
-    <script>
-        // Initialize app when DOM is ready
-        console.log('Inline script running, DOM state:', document.readyState);
-        let app;
-        
-        function initApp() {
-            console.log('=== INITIALIZING APP ===');
-            try {
-                app = new RadiologyApp();
-                console.log('App created:', app);
-            } catch (error) {
-                console.error('ERROR creating app:', error);
-            }
-        }
-        
-        if (document.readyState === 'loading') {
-            console.log('Waiting for DOMContentLoaded...');
-            document.addEventListener('DOMContentLoaded', initApp);
-        } else {
-            console.log('DOM already loaded, initializing now');
-            initApp();
-        }
-    </script>
 </body>
 </html>
