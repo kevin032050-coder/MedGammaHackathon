@@ -230,6 +230,26 @@ async def get_slice_image(request: GetSliceImageRequest):
         logger.error(f"Error getting slice image: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/get-dicom-urls")
+async def get_dicom_urls(request: AnalyzeStudyRequest):
+    """Get DICOM file URLs for DWV to load directly"""
+    try:
+        logger.info(f"Getting DICOM URLs for study: {request.study_id}")
+        
+        study_data = dicom_processor.get_study(request.study_id)
+        dicom_files = study_data.get('dicom_files', [])
+        
+        # Convert file paths to file:// URLs
+        urls = [f"file://{filepath}" for filepath in dicom_files]
+        
+        return {
+            "success": True,
+            "urls": urls
+        }
+    except Exception as e:
+        logger.error(f"Error getting DICOM URLs: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize Med Gemma model on startup"""

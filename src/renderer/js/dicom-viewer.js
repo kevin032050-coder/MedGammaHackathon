@@ -1,44 +1,182 @@
-// DICOM Viewer
+// DICOM Viewer with DWV
+import * as dwv from '../../../node_modules/dwv/dist/dwv.mjs';
+
 class DICOMViewer {
     constructor(app) {
         this.app = app;
-        this.canvas = document.getElementById('image-canvas');
-        this.ctx = this.canvas.getContext('2d');
-        this.overlayCanvas = document.getElementById('overlay-canvas');
+        this.dwvApp = null;
         this.slider = document.getElementById('slice-slider');
-        
-        // Zoom and pan state
-        this.zoomLevel = 1.0;
-        this.minZoom = 0.5;
-        this.maxZoom = 4.0;
-        this.panX = 0;
-        this.panY = 0;
-        this.isDragging = false;
-        this.lastMouseX = 0;
-        this.lastMouseY = 0;
-        this.currentImage = null;
-        this.currentPreset = 'brain';  // Default preset
+        this.currentPreset = 'brain';
         
         this.setupEventListeners();
+        this.initDWV();
+    }
+
+    initDWV() {
+        // Initialize DWV application
+        this.dwvApp = new dwv.App();
+        
+        // Configure DWV
+        this.dwvApp.init({
+            dataViewConfigs: {'*': [{divId: 'dwv-layer'}]},
+            tools: {
+                Scroll: {},
+                ZoomAndPan: {},
+                WindowLevel: {presets: this.getWindowPresets()}
+            }
+        });
+
+        // Set initial tool
+        this.dwvApp.addEventListener('load', () => {
+            console.log('DWV loaded successfully');
+            this.dwvApp.setTool('Scroll');
+        });
+
+        // Handle slice change
+        this.dwvApp.addEventListener('positionchange', (event) => {
+            const position = event.value[2]; // Z position (slice)
+            if (position !== undefined) {
+                this.slider.value = position;
+                this.updateSliceInfo(position);
+            }
+        });
+    }
+
+    getWindowPresets() {
+        // CT Window presets in DWV format
+        return {
+            'brain': {center: 40, width: 80},
+            'subdural': {center: 80, width: 200},
+            'bone': {center: 400, width: 1800},
+            'lung': {center: -600, width: 1500},
+            'abdomen': {center: 40, width: 400}
+        };
     }
 
     setupEventListeners() {
         this.slider.addEventListener('input', (e) => {
-            this.goToSlice(parseInt(e.target.value));
+            const sliceIndex = parseInt(e.target.value);
+            this.goToSlice(sliceIndex);
         });
 
         // Window preset buttons
         document.querySelectorAll('.preset-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
-                // Update active state
                 document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
                 e.target.classList.add('active');
                 
-                // Set preset and reload
                 this.currentPreset = e.target.dataset.preset;
-                this.goToSlice(this.app.currentSlice);
+                this.applyWindowPreset(this.currentPreset);
             });
         });
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            if (!this.app.currentStudy) return;
+
+            if (e.key === 'ArrowUp' || e.key === 'ArrowRight') {
+                e.preventDefault();
+                const currentSlice = parseInt(this.slider.value);
+                this.goToSlice(currentSlice + 1);
+            } else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') {
+                e.preventDefault();
+                const currentSlice = parseInt(this.slider.value);
+                this.goToSlice(currentSlice - 1);
+            }
+        });
+    }
+
+    async loadStudy(study) {
+        console.log('Loading study with DWV:', study);
+
+        if (!study.dicom_files || study.dicom_files.length === 0) {
+            console.error('No DICOM files in study');
+            return;
+        }
+
+        try {
+            // Get DICOM file URLs from backend
+            const fileUrls = await this.getDicomUrls(study.study_id);
+            
+            // Load DICOM files with DWV
+            await this.dwvApp.loadURLs(fileUrls);
+
+            // Configure slider
+            const numSlices = study.num_slices;
+            this.slider.disabled = false;
+            this.slider.min = 0;
+            this.slider.max = numSlices - 1;
+            this.slider.value = 0;
+
+            // Hide empty state
+            document.querySelector('.empty-viewer').style.display = 'none';
+
+            // Apply default window preset
+            this.applyWindowPreset(this.currentPreset);
+
+            console.log(`DWV loaded ${numSlices} slices`);
+            
+        } catch (error) {
+            console.error('Error loading study with DWV:', error);
+            this.app.showToast('Error loading DICOM files', 'error');
+        }
+    }
+
+    async getDicomUrls(studyId) {
+        // Get DICOM file URLs from backend
+        const response = await window.electronAPI.getDicomUrls(studyId);
+        if (response.success) {
+            return response.urls;
+        }
+        throw new Error('Failed to get DICOM URLs');
+    }
+
+    goToSlice(sliceIndex) {
+        if (!this.dwvApp || !this.app.currentStudy) return;
+
+        const numSlices = this.app.currentStudy.num_slices;
+        if (sliceIndex < 0 || sliceIndex >= numSlices) return;
+
+        // Set position in DWV (position is [x, y, z])
+        const currentPos = this.dwvApp.getActiveLayerGroup().getActiveViewLayer().getViewController().getPosition();
+        this.dwvApp.getActiveLayerGroup().getActiveViewLayer().getViewController().setPosition(
+            new dwv.math.Index([currentPos[0], currentPos[1], sliceIndex])
+        );
+
+        this.slider.value = sliceIndex;
+        this.app.currentSlice = sliceIndex;
+        this.updateSliceInfo(sliceIndex);
+    }
+
+    updateSliceInfo(sliceIndex) {
+        const numSlices = this.app.currentStudy ? this.app.currentStudy.num_slices : 0;
+        document.getElementById('slice-counter').textContent = `Slice ${sliceIndex + 1} / ${numSlices}`;
+    }
+
+    applyWindowPreset(presetName) {
+        if (!this.dwvApp) return;
+
+        const presets = this.getWindowPresets();
+        const preset = presets[presetName];
+        
+        if (preset) {
+            console.log(`Applying preset: ${presetName} (C=${preset.center}, W=${preset.width})`);
+            
+            // Apply window level to DWV
+            const viewController = this.dwvApp.getActiveLayerGroup().getActiveViewLayer().getViewController();
+            viewController.setWindowLevel(preset.center, preset.width);
+        }
+    }
+
+    toggleOverlay(enabled) {
+        // AI overlay will be handled separately
+        console.log('AI overlay toggle:', enabled);
+    }
+
+    generateSimulatedCT(sliceIndex) {
+        // Not needed with DWV - it handles everything
+    }
+}
 
         // Keyboard navigation
         document.addEventListener('keydown', (e) => {

@@ -83,23 +83,14 @@
             </div>
 
             <div class="viewer-container">
-                <div id="dicom-viewer" class="dicom-canvas">
-                    <div class="orientation-markers">
-                        <span class="marker marker-top">A</span>
-                        <span class="marker marker-right">R</span>
-                        <span class="marker marker-bottom">P</span>
-                        <span class="marker marker-left">L</span>
-                    </div>
-                    
-                    <canvas id="image-canvas"></canvas>
-                    
-                    <svg id="overlay-canvas" class="overlay-svg">
-                        <!-- AI overlays will be drawn here -->
-                    </svg>
-                    
-                    <div class="empty-viewer">
-                        <p>No study selected</p>
-                    </div>
+                <div id="dwv-layer" class="dwv-layer"></div>
+                
+                <svg id="overlay-canvas" class="overlay-svg">
+                    <!-- AI overlays will be drawn here -->
+                </svg>
+                
+                <div class="empty-viewer">
+                    <p>No study selected</p>
                 </div>
 
                 <!-- Dwell Time Tooltip -->
@@ -227,8 +218,8 @@
     <div id="toast-container" class="toast-container"></div>
 
     <!-- Scripts -->
+    <script type="module" src="js/dicom-viewer.js"></script>
     <script src="js/app.js"></script>
-    <script src="js/dicom-viewer.js"></script>
     <script src="js/worklist.js"></script>
     <script src="js/chat.js"></script>
     <script src="js/report.js"></script>
