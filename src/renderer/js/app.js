@@ -31,9 +31,17 @@ class RadiologyApp {
 
     setupEventListeners() {
         // Load Study Button
-        document.getElementById('load-study-btn').addEventListener('click', async () => {
-            await this.loadStudy();
-        });
+        const loadBtn = document.getElementById('load-study-btn');
+        console.log('Load button element:', loadBtn);
+        
+        if (loadBtn) {
+            loadBtn.addEventListener('click', async () => {
+                console.log('Load button clicked!');
+                await this.loadStudy();
+            });
+        } else {
+            console.error('Load button not found!');
+        }
 
         // AI Priority Toggle
         document.getElementById('ai-priority-toggle').addEventListener('change', (e) => {
@@ -75,10 +83,17 @@ class RadiologyApp {
     }
 
     async loadStudy() {
+        console.log('=== loadStudy() called ===');
         try {
             // Open folder dialog
+            console.log('Opening folder dialog...');
             const folderPath = await window.electronAPI.selectDicomFolder();
-            if (!folderPath) return;
+            console.log('Folder selected:', folderPath);
+            
+            if (!folderPath) {
+                console.log('No folder selected');
+                return;
+            }
 
             console.log('Selected folder:', folderPath);
             this.showToast('Loading DICOM study...', 'info');
