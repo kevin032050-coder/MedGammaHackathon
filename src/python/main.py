@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import uvicorn
@@ -54,6 +55,13 @@ class FeedbackRequest(BaseModel):
     study_id: str
     agreed: bool
     correction: Optional[str] = None
+
+class GetSliceImageRequest(BaseModel):
+    study_id: str
+    slice_index: int
+    window_center: Optional[int] = None
+    window_width: Optional[int] = None
+    window_preset: Optional[str] = None
 
 # API Endpoints
 @app.get("/health")
@@ -199,6 +207,131 @@ async def submit_feedback(request: FeedbackRequest):
         }
     except Exception as e:
         logger.error(f"Error submitting feedback: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/get-slice-pixels")
+async def get_slice_pixels(request: GetSliceImageRequest):
+    """Get raw pixel data for high-quality client-side rendering"""
+    try:
+        logger.info(f"Getting raw pixels: study={request.study_id}, slice={request.slice_index}")
+        
+        pixel_data = dicom_processor.get_slice_pixels(
+            request.study_id, 
+            request.slice_index
+        )
+        
+        return pixel_data
+    except Exception as e:
+        logger.error(f"Error getting slice pixels: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/get-slice-image")
+async def get_slice_image(request: GetSliceImageRequest):
+    """Get slice image as base64 for display"""
+    try:
+        logger.info(f"Getting slice image: study={request.study_id}, slice={request.slice_index}, preset={request.window_preset}")
+        
+        image_data = dicom_processor.get_slice_image(
+            request.study_id, 
+            request.slice_index,
+            request.window_center,
+            request.window_width,
+            request.window_preset
+        )
+        
+        return {
+            "success": True,
+            "image_data": image_data
+        }
+    except Exception as e:
+        logger.error(f"Error getting slice image: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/get-dicom-file-data")
+async def get_dicom_file_data(request: AnalyzeStudyRequest):
+    """Get all DICOM files as base64 for direct loading"""
+    try:
+        logger.info(f"Getting DICOM file data for study: {request.study_id}")
+        
+        study_data = dicom_processor.get_study(request.study_id)
+        dicom_files = study_data.get('dicom_files', [])
+        
+        # Read all files and encode as base64
+        import base64
+        file_data = []
+        for filepath in dicom_files:
+            with open(filepath, 'rb') as f:
+                content = f.read()
+                encoded = base64.b64encode(content).decode('utf-8')
+                file_data.append(encoded)
+        
+        logger.info(f"Returning {len(file_data)} files")
+        
+        return {
+            "success": True,
+            "files": file_data
+        }
+    except Exception as e:
+        logger.error(f"Error getting DICOM file data: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/get-dicom-urls")
+async def get_dicom_urls(request: AnalyzeStudyRequest):
+    """Get DICOM file URLs for DWV to load directly"""
+    try:
+        logger.info(f"Getting DICOM URLs for study: {request.study_id}")
+        
+        study_data = dicom_processor.get_study(request.study_id)
+        dicom_files = study_data.get('dicom_files', [])
+        
+        # Return URLs to backend endpoints instead of file:// URLs
+        urls = [f"http://localhost:8000/api/dicom-file/{request.study_id}/{i}" 
+                for i in range(len(dicom_files))]
+        
+        return {
+            "success": True,
+            "urls": urls
+        }
+    except Exception as e:
+        logger.error(f"Error getting DICOM URLs: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/dicom-file/{study_id}/{file_index}")
+async def get_dicom_file(study_id: str, file_index: int):
+    """Serve raw DICOM file for DWV"""
+    try:
+        logger.info(f"Serving DICOM file: study={study_id}, index={file_index}")
+        
+        study_data = dicom_processor.get_study(study_id)
+        dicom_files = study_data.get('dicom_files', [])
+        
+        if file_index >= len(dicom_files):
+            logger.error(f"File index {file_index} out of range (max: {len(dicom_files)-1})")
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        filepath = dicom_files[file_index]
+        logger.info(f"Reading file: {filepath}")
+        
+        # Read and return raw DICOM file
+        with open(filepath, 'rb') as f:
+            content = f.read()
+        
+        logger.info(f"Serving {len(content)} bytes")
+        
+        return Response(
+            content=content, 
+            media_type="application/dicom",
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, OPTIONS",
+                "Access-Control-Allow-Headers": "*"
+            }
+        )
+    except FileNotFoundError as e:
+        logger.error(f"File not found: {str(e)}")
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error serving DICOM file: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.on_event("startup")

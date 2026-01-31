@@ -6,7 +6,7 @@ pydantic==2.5.3
 # DICOM Processing
 pydicom==2.4.4
 pillow==10.2.0
-numpy==1.26.3
+numpy>=1.24.0
 
 # Med Gemma Model
 # Note: Med Gemma requires specific setup - adjust based on actual model requirements

@@ -1,0 +1,328 @@
+/* CSS Variables - PACS Dark Theme */
+:root {
+    --bg-dark: #0a0a0a;
+    --bg-panel: #1a1a1a;
+    --bg-elevated: #2a2a2a;
+    --border-color: #333;
+    --text-primary: #e0e0e0;
+    --text-secondary: #a0a0a0;
+    --text-dim: #707070;
+    --accent-primary: #4a9eff;
+    --accent-success: #4caf50;
+    --accent-warning: #ff9800;
+    --accent-critical: #f44336;
+    --overlay-ai: rgba(74, 158, 255, 0.3);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: var(--bg-dark);
+    color: var(--text-primary);
+    overflow: hidden;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Disclaimer Banner */
+.disclaimer-banner {
+    background: #1a1a00;
+    color: #ffeb3b;
+    text-align: center;
+    padding: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    border-bottom: 2px solid #ffc107;
+    letter-spacing: 0.5px;
+}
+
+/* Top Bar */
+.top-bar {
+    background: var(--bg-panel);
+    padding: 12px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.patient-info {
+    display: flex;
+    gap: 20px;
+    font-size: 14px;
+}
+
+.patient-info span {
+    padding: 4px 8px;
+    background: var(--bg-elevated);
+    border-radius: 4px;
+}
+
+.vitals {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+/* Main Container */
+.main-container {
+    display: grid;
+    grid-template-columns: 300px 1fr 400px;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* Panels */
+.left-panel,
+.center-panel,
+.right-panel {
+    background: var(--bg-panel);
+    border-right: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.right-panel {
+    border-right: none;
+}
+
+.panel-header {
+    padding: 16px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.panel-header h2 {
+    font-size: 16px;
+    font-weight: 600;
+}
+
+/* Buttons */
+.btn-primary,
+.btn-secondary,
+.btn-feedback {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.btn-primary {
+    background: var(--accent-primary);
+    color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: #3a8eef;
+}
+
+.btn-secondary {
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background: #3a3a3a;
+}
+
+.btn-primary:disabled,
+.btn-secondary:disabled,
+.btn-feedback:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* Toggle Switch */
+.toggle-switch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: relative;
+    width: 40px;
+    height: 20px;
+    background: var(--bg-elevated);
+    border-radius: 20px;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.slider:before {
+    content: "";
+    position: absolute;
+    height: 16px;
+    width: 16px;
+    left: 2px;
+    bottom: 2px;
+    background: var(--text-dim);
+    border-radius: 50%;
+    transition: 0.3s;
+}
+
+input:checked + .slider {
+    background: var(--accent-primary);
+}
+
+input:checked + .slider:before {
+    transform: translateX(20px);
+    background: white;
+}
+
+.toggle-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+/* Empty State */
+.empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-dim);
+}
+
+.empty-state .hint {
+    font-size: 12px;
+    margin-top: 8px;
+}
+
+/* Bottom Ribbon */
+.bottom-ribbon {
+    background: var(--bg-panel);
+    border-top: 1px solid var(--border-color);
+    padding: 12px 20px;
+}
+
+.feedback-container {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.feedback-question {
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.btn-feedback {
+    min-width: 80px;
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+}
+
+.btn-feedback:hover:not(:disabled) {
+    background: var(--accent-success);
+    color: white;
+}
+
+.feedback-correction {
+    display: flex;
+    gap: 8px;
+    flex: 1;
+    max-width: 600px;
+}
+
+.feedback-correction input {
+    flex: 1;
+    padding: 8px 12px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-size: 13px;
+}
+
+.feedback-correction.hidden {
+    display: none;
+}
+
+/* Toast Notifications */
+.toast-container {
+    position: fixed;
+    top: 60px;
+    right: 20px;
+    z-index: 1000;
+}
+
+.toast {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 12px 16px;
+    margin-bottom: 8px;
+    min-width: 250px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    animation: slideIn 0.3s ease-out;
+}
+
+.toast.success {
+    border-left: 4px solid var(--accent-success);
+}
+
+.toast.error {
+    border-left: 4px solid var(--accent-critical);
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(400px);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* Utility Classes */
+.hidden {
+    display: none !important;
+}
+
+.readonly-badge {
+    font-size: 10px;
+    background: var(--bg-elevated);
+    padding: 2px 6px;
+    border-radius: 3px;
+    color: var(--text-dim);
+    font-weight: normal;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-panel);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--bg-elevated);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #3a3a3a;
+}

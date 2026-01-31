@@ -23,5 +23,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
     generateReport: (studyId, findings) => ipcRenderer.invoke('generate-report', studyId, findings),
     
     // Feedback system
-    submitFeedback: (feedbackData) => ipcRenderer.invoke('submit-feedback', feedbackData)
+    submitFeedback: (feedbackData) => ipcRenderer.invoke('submit-feedback', feedbackData),
+    
+    // Get slice image
+    getSliceImage: (studyId, sliceIndex, windowCenter, windowWidth, windowPreset) => 
+        ipcRenderer.invoke('get-slice-image', studyId, sliceIndex, windowCenter, windowWidth, windowPreset),
+    
+    // Get raw slice pixels (high quality)
+    getSlicePixels: (studyId, sliceIndex) => 
+        ipcRenderer.invoke('get-slice-pixels', studyId, sliceIndex),
+    
+    // Get DICOM URLs for DWV
+    getDicomUrls: (studyId) => ipcRenderer.invoke('get-dicom-urls', studyId),
+    
+    // Get DICOM file data for DWV
+    getDicomFileData: (studyId) => ipcRenderer.invoke('get-dicom-file-data', studyId)
 });

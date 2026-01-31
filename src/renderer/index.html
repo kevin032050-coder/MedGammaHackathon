@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MedGemma Radiology PACS</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/pacs-viewer.css">
+    <link rel="stylesheet" href="styles/worklist.css">
+    <link rel="stylesheet" href="styles/report.css">
+    
+</head>
+<body>
+    <!-- Disclaimer Banner -->
+    <div class="disclaimer-banner">
+        ⚠️ AI ASSISTIVE TOOL - NOT FOR FINAL DIAGNOSIS - RADIOLOGIST AUTHORITY ALWAYS FINAL
+    </div>
+
+    <!-- Top Bar: Clinical Context -->
+    <div class="top-bar">
+        <div class="patient-info">
+            <span id="patient-name">No Study Loaded</span>
+            <span id="patient-age-sex"></span>
+            <span id="patient-protocol"></span>
+        </div>
+        <div class="vitals">
+            <span id="patient-vitals"></span>
+        </div>
+        <button id="ehr-context-btn" class="btn-primary" disabled>
+            Use EHR Context to Guide Reading
+        </button>
+    </div>
+
+    <!-- Main Container: 3-Panel Layout -->
+    <div class="main-container">
+        
+        <!-- LEFT PANEL: AI-Prioritized Worklist -->
+        <div class="left-panel">
+            <div class="panel-header">
+                <h2>Worklist</h2>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="ai-priority-toggle" checked>
+                    <span class="slider"></span>
+                    <span class="toggle-label">AI Priority</span>
+                </label>
+            </div>
+            
+            <button id="load-study-btn" class="btn-primary">Load DICOM Study</button>
+            
+            <div id="worklist-container" class="worklist-items">
+                <div class="empty-state">
+                    <p>No studies loaded</p>
+                    <p class="hint">Click "Load DICOM Study" to begin</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- CENTER PANEL: PACS Viewer -->
+        <div class="center-panel">
+            <div class="viewer-controls">
+                <div class="control-group">
+                    <label>
+                        <input type="checkbox" id="ai-overlay-toggle" checked>
+                        AI Overlay
+                    </label>
+                </div>
+                <div class="window-presets">
+                    <button class="preset-btn active" data-preset="brain">Brain</button>
+                    <button class="preset-btn" data-preset="subdural">Subdural</button>
+                    <button class="preset-btn" data-preset="bone">Bone</button>
+                    <button class="preset-btn" data-preset="lung">Lung</button>
+                    <button class="preset-btn" data-preset="abdomen">Abdomen</button>
+                </div>
+                <div class="zoom-controls">
+                    <button id="zoom-out-btn" class="btn-secondary">−</button>
+                    <span id="zoom-level">100%</span>
+                    <button id="zoom-in-btn" class="btn-secondary">+</button>
+                    <button id="zoom-reset-btn" class="btn-secondary">Reset</button>
+                </div>
+                <div class="slice-info">
+                    <span id="slice-counter">Slice 0 / 0</span>
+                    <span id="resolution-info" style="margin-left: 16px; color: var(--text-dim); font-size: 11px;"></span>
+                </div>
+            </div>
+
+            <div class="viewer-container">
+                <canvas id="image-canvas"></canvas>
+                
+                <svg id="overlay-canvas" class="overlay-svg">
+                    <!-- AI overlays will be drawn here -->
+                </svg>
+                
+                <div class="empty-viewer">
+                    <p>No study selected</p>
+                </div>
+
+                <!-- Dwell Time Tooltip -->
+                <div id="dwell-tooltip" class="dwell-tooltip hidden">
+                    <div class="tooltip-content"></div>
+                    <button class="tooltip-close">×</button>
+                </div>
+            </div>
+
+            <div class="slice-controls">
+                <input type="range" id="slice-slider" min="0" max="0" value="0" disabled>
+            </div>
+        </div>
+
+        <!-- RIGHT PANEL: Tabs (Chat / Report) -->
+        <div class="right-panel">
+            <div class="panel-tabs">
+                <button class="tab-btn active" data-tab="chat">Copilot Chat</button>
+                <button class="tab-btn" data-tab="report">Report</button>
+                <button class="tab-btn" data-tab="incidental">Incidental Findings</button>
+            </div>
+
+            <!-- Chat Tab -->
+            <div id="chat-tab" class="tab-content active">
+                <div class="chat-mode">
+                    <label>
+                        <input type="radio" name="chat-mode" value="radiologist" checked>
+                        Radiologist Mode
+                    </label>
+                    <label>
+                        <input type="radio" name="chat-mode" value="resident">
+                        Resident Mode
+                    </label>
+                </div>
+
+                <div id="chat-messages" class="chat-messages">
+                    <div class="chat-message system">
+                        <p>👋 AI Copilot ready. Ask me about the current study.</p>
+                        <p class="disclaimer">I provide assistance only - you have final authority.</p>
+                    </div>
+                </div>
+
+                <div class="chat-input-container">
+                    <input type="text" id="chat-input" placeholder="Ask about findings, slices, or interpretations..." disabled>
+                    <button id="chat-send-btn" class="btn-primary" disabled>Send</button>
+                </div>
+
+                <div class="voice-dictation">
+                    <button id="voice-btn" class="btn-secondary" disabled>
+                        🎤 Voice Dictation (Findings)
+                    </button>
+                </div>
+            </div>
+
+            <!-- Report Tab -->
+            <div id="report-tab" class="tab-content">
+                <div class="report-sections">
+                    <div class="report-section">
+                        <h3>Clinical History</h3>
+                        <textarea id="clinical-history" rows="2" readonly></textarea>
+                    </div>
+
+                    <div class="report-section">
+                        <h3>AI-Suggested Findings <span class="readonly-badge">READ-ONLY</span></h3>
+                        <textarea id="ai-findings" rows="6" readonly></textarea>
+                    </div>
+
+                    <div class="report-section">
+                        <h3>Radiologist Findings</h3>
+                        <textarea id="radiologist-findings" rows="6" placeholder="Enter your findings here..."></textarea>
+                    </div>
+
+                    <div class="report-section">
+                        <h3>Impression</h3>
+                        <textarea id="impression" rows="3" placeholder="Enter impression..."></textarea>
+                    </div>
+
+                    <div class="severity-badges">
+                        <span class="badge">ASPECTS: <span id="aspects-score">-</span></span>
+                    </div>
+
+                    <div class="report-actions">
+                        <button id="generate-report-btn" class="btn-secondary" disabled>
+                            Generate AI Report
+                        </button>
+                        <button id="voice-final-btn" class="btn-secondary" disabled>
+                            🎤 Final Voice Dictation
+                        </button>
+                        <button id="finalize-report-btn" class="btn-primary" disabled>
+                            Finalize & Sign Report
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Incidental Findings Tab -->
+            <div id="incidental-tab" class="tab-content">
+                <div class="incidental-header">
+                    <h3>Incidental Findings</h3>
+                    <p class="hint">AI-detected findings requiring attention</p>
+                </div>
+                <div id="incidental-findings-list" class="incidental-list">
+                    <div class="empty-state">
+                        <p>No incidental findings detected</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Ribbon: Feedback Loop -->
+    <div class="bottom-ribbon">
+        <div class="feedback-container">
+            <span class="feedback-question">Do you agree with the AI-suggested findings?</span>
+            <button id="feedback-yes" class="btn-feedback" disabled>YES</button>
+            <button id="feedback-no" class="btn-feedback" disabled>NO</button>
+            <div id="feedback-correction" class="feedback-correction hidden">
+                <input type="text" id="correction-input" placeholder="Please describe the correction...">
+                <button id="submit-correction" class="btn-primary">Submit</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Scripts - Load dependencies first -->
+    <script src="js/dicom-viewer-canvas.js"></script>
+    <script src="js/worklist.js"></script>
+    <script src="js/chat.js"></script>
+    <script src="js/report.js"></script>
+    <script src="js/voice.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

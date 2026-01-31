@@ -186,6 +186,59 @@ ipcMain.handle('submit-feedback', async (event, feedbackData) => {
     }
 });
 
+ipcMain.handle('get-slice-image', async (event, studyId, sliceIndex, windowCenter, windowWidth, windowPreset) => {
+    try {
+        const response = await axios.post(`http://localhost:${PYTHON_PORT}/api/get-slice-image`, {
+            study_id: studyId,
+            slice_index: sliceIndex,
+            window_center: windowCenter,
+            window_width: windowWidth,
+            window_preset: windowPreset
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Error getting slice image:', error);
+        throw error;
+    }
+});
+
+ipcMain.handle('get-slice-pixels', async (event, studyId, sliceIndex) => {
+    try {
+        const response = await axios.post(`http://localhost:${PYTHON_PORT}/api/get-slice-pixels`, {
+            study_id: studyId,
+            slice_index: sliceIndex
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Error getting slice pixels:', error);
+        throw error;
+    }
+});
+
+ipcMain.handle('get-dicom-file-data', async (event, studyId) => {
+    try {
+        const response = await axios.post(`http://localhost:${PYTHON_PORT}/api/get-dicom-file-data`, {
+            study_id: studyId
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Error getting DICOM file data:', error);
+        throw error;
+    }
+});
+
+ipcMain.handle('get-dicom-urls', async (event, studyId) => {
+    try {
+        const response = await axios.post(`http://localhost:${PYTHON_PORT}/api/get-dicom-urls`, {
+            study_id: studyId
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Error getting DICOM URLs:', error);
+        throw error;
+    }
+});
+
 // App lifecycle
 app.whenReady().then(async () => {
     try {
