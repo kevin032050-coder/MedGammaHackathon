@@ -30,6 +30,9 @@ class DICOMViewer {
     }
 
     loadStudy(study) {
+        console.log('Loading study:', study);
+        console.log('Number of slices:', study.num_slices);
+        
         this.canvas.width = 512;
         this.canvas.height = 512;
 
@@ -37,6 +40,8 @@ class DICOMViewer {
         this.slider.disabled = false;
         this.slider.max = study.num_slices - 1;
         this.slider.value = 0;
+        
+        console.log('Slider configured - max:', this.slider.max);
 
         // Hide empty state
         document.querySelector('.empty-viewer').style.display = 'none';
@@ -75,12 +80,16 @@ class DICOMViewer {
     }
 
     async renderSlice(sliceIndex) {
+        console.log(`Rendering slice ${sliceIndex}`);
+        
         // Clear canvas
         this.ctx.fillStyle = '#0a0a0a';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
         // Try to load real DICOM image
         try {
+            console.log(`Requesting image for study: ${this.app.currentStudy.study_id}, slice: ${sliceIndex}`);
+            
             const response = await window.electronAPI.getSliceImage(
                 this.app.currentStudy.study_id,
                 sliceIndex,
@@ -88,20 +97,30 @@ class DICOMViewer {
                 80  // window width
             );
 
+            console.log('Image response:', response);
+
             if (response.success && response.image_data) {
                 // Load image from base64
                 const img = new Image();
                 img.onload = () => {
+                    console.log('Image loaded successfully, drawing to canvas');
                     this.ctx.drawImage(img, 0, 0, this.canvas.width, this.canvas.height);
+                };
+                img.onerror = (error) => {
+                    console.error('Image failed to load:', error);
+                    this.generateSimulatedCT(sliceIndex);
                 };
                 img.src = response.image_data;
                 return;
+            } else {
+                console.warn('No image data in response');
             }
         } catch (error) {
             console.error('Error loading DICOM image:', error);
         }
 
         // Fallback to simulated CT if real image fails
+        console.log('Using simulated CT');
         this.generateSimulatedCT(sliceIndex);
     }
 

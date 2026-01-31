@@ -80,14 +80,18 @@ class RadiologyApp {
             const folderPath = await window.electronAPI.selectDicomFolder();
             if (!folderPath) return;
 
+            console.log('Selected folder:', folderPath);
             this.showToast('Loading DICOM study...', 'info');
 
             // Load study via Python backend
             const response = await window.electronAPI.loadDicomStudy(folderPath);
             
+            console.log('Load study response:', response);
+            
             if (response.success) {
                 this.currentStudy = response.study;
                 console.log('Study loaded:', this.currentStudy);
+                console.log('Number of slices:', this.currentStudy.num_slices);
 
                 // Add to worklist
                 this.worklist.addStudy(this.currentStudy);
@@ -99,7 +103,10 @@ class RadiologyApp {
                 this.updatePatientInfo();
                 this.enableControls();
 
-                this.showToast('Study loaded successfully', 'success');
+                this.showToast(`Study loaded successfully - ${this.currentStudy.num_slices} slices`, 'success');
+            } else {
+                console.error('Study load failed:', response);
+                this.showToast('Failed to load study', 'error');
             }
         } catch (error) {
             console.error('Error loading study:', error);
