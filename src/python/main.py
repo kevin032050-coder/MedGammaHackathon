@@ -256,19 +256,36 @@ async def get_dicom_urls(request: AnalyzeStudyRequest):
 async def get_dicom_file(study_id: str, file_index: int):
     """Serve raw DICOM file for DWV"""
     try:
+        logger.info(f"Serving DICOM file: study={study_id}, index={file_index}")
+        
         study_data = dicom_processor.get_study(study_id)
         dicom_files = study_data.get('dicom_files', [])
         
         if file_index >= len(dicom_files):
+            logger.error(f"File index {file_index} out of range (max: {len(dicom_files)-1})")
             raise HTTPException(status_code=404, detail="File not found")
         
         filepath = dicom_files[file_index]
+        logger.info(f"Reading file: {filepath}")
         
         # Read and return raw DICOM file
         with open(filepath, 'rb') as f:
             content = f.read()
         
-        return Response(content=content, media_type="application/dicom")
+        logger.info(f"Serving {len(content)} bytes")
+        
+        return Response(
+            content=content, 
+            media_type="application/dicom",
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, OPTIONS",
+                "Access-Control-Allow-Headers": "*"
+            }
+        )
+    except FileNotFoundError as e:
+        logger.error(f"File not found: {str(e)}")
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error(f"Error serving DICOM file: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

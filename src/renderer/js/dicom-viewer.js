@@ -151,7 +151,16 @@ class DICOMViewer {
             }
             
             console.log('Loading', response.urls.length, 'DICOM files into DWV');
-            console.log('URLs:', response.urls);
+            console.log('First 3 URLs:', response.urls.slice(0, 3));
+            
+            // Test first URL
+            console.log('Testing first URL:', response.urls[0]);
+            const testResponse = await fetch(response.urls[0]);
+            console.log('Test response status:', testResponse.status);
+            console.log('Test response headers:', [...testResponse.headers.entries()]);
+            
+            // Reset DWV before loading
+            this.dwvApp.reset();
             
             // Load DICOM files with DWV
             this.dwvApp.loadURLs(response.urls);
