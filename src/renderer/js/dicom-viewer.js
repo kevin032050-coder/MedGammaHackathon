@@ -101,6 +101,10 @@ class DICOMViewer {
                 const img = new Image();
                 img.onload = () => {
                     console.log('Image loaded successfully');
+                    console.log(`Image dimensions: ${img.width}x${img.height}`);
+                    
+                    // Display resolution info
+                    document.getElementById('resolution-info').textContent = `${img.width}x${img.height}px`;
                     
                     // Center image on canvas and preserve aspect ratio
                     const aspectRatio = img.width / img.height;

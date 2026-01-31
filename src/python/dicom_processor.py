@@ -287,19 +287,37 @@ class DICOMProcessor:
             
             # Get original dimensions
             original_width, original_height = img.size
+            logger.info(f"Native DICOM dimensions: {original_width}x{original_height}")
             
-            # Calculate aspect ratio preserving resize to 512x512 max
-            max_size = 768  # Increase from 512 for better quality
-            if original_width > original_height:
-                new_width = max_size
-                new_height = int((original_height / original_width) * max_size)
-            else:
-                new_height = max_size
-                new_width = int((original_width / original_height) * max_size)
+            # Don't resize if already good quality - preserve native resolution
+            target_size = 768
             
-            # Use high-quality resampling (Lanczos is best for downsampling)
-            if img.size != (new_width, new_height):
+            # Only resize if significantly different from target
+            if original_width > target_size * 1.2 or original_height > target_size * 1.2:
+                # Downscale large images
+                if original_width > original_height:
+                    new_width = target_size
+                    new_height = int((original_height / original_width) * target_size)
+                else:
+                    new_height = target_size
+                    new_width = int((original_width / original_height) * target_size)
+                
                 img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                logger.info(f"Resized to: {new_width}x{new_height}")
+            elif original_width < target_size * 0.5 or original_height < target_size * 0.5:
+                # Upscale small images with bicubic (better for enlarging)
+                if original_width > original_height:
+                    new_width = target_size
+                    new_height = int((original_height / original_width) * target_size)
+                else:
+                    new_height = target_size
+                    new_width = int((original_width / original_height) * target_size)
+                
+                img = img.resize((new_width, new_height), Image.Resampling.BICUBIC)
+                logger.info(f"Upscaled to: {new_width}x{new_height}")
+            else:
+                # Keep native resolution
+                logger.info(f"Keeping native resolution: {original_width}x{original_height}")
             
             # Convert to RGB for better browser compatibility
             img = img.convert('RGB')
@@ -309,7 +327,8 @@ class DICOMProcessor:
             img.save(buffered, format="PNG", optimize=False, compress_level=1)  # Low compression = higher quality
             img_str = base64.b64encode(buffered.getvalue()).decode()
             
-            logger.info(f"Successfully converted slice {slice_index} to base64 (size: {new_width}x{new_height})")
+            final_width, final_height = img.size
+            logger.info(f"Successfully converted slice {slice_index} to base64 (final size: {final_width}x{final_height}, base64 length: {len(img_str)} chars)")
             return f"data:image/png;base64,{img_str}"
             
         except Exception as e:
