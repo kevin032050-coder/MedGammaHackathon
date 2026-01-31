@@ -45,40 +45,9 @@ class DICOMViewer {
                 console.log('✅ DWV LOADEND EVENT:', event);
                 
                 try {
-                    // Get the actual number of slices from DWV
-                    const dataIds = this.dwvApp.getDataIds();
-                    console.log('Data IDs:', dataIds);
-                    
-                    if (dataIds.length === 0) {
-                        console.error('No data IDs found!');
-                        return;
-                    }
-                    
-                    const dataId = dataIds[0];
-                    console.log('Using dataId:', dataId);
-                    
-                    const layerGroup = this.dwvApp.getLayerGroupByDataId(dataId);
-                    console.log('Layer group:', layerGroup);
-                    
-                    const viewLayer = layerGroup.getActiveViewLayer();
-                    console.log('View layer:', viewLayer);
-                    
-                    const viewController = viewLayer.getViewController();
-                    console.log('View controller:', viewController);
-                    
-                    // Get image size
-                    const image = this.dwvApp.getImage(dataId);
-                    console.log('Image:', image);
-                    
-                    const geometry = image.getGeometry();
-                    console.log('Geometry:', geometry);
-                    
-                    const size = geometry.getSize();
-                    console.log('Size object:', size);
-                    console.log('Size values:', size.getValues());
-                    
-                    const numberOfSlices = size.getValues()[2] || 1; // Z dimension
-                    console.log('Number of slices:', numberOfSlices);
+                    // Simpler approach - just set slider to match backend count
+                    const numberOfSlices = this.app.currentStudy.num_slices;
+                    console.log('Using slice count from backend:', numberOfSlices);
                     
                     // Update slider
                     this.slider.disabled = false;
@@ -93,9 +62,19 @@ class DICOMViewer {
                         value: this.slider.value
                     });
                     
-                    // Set grayscale color map
-                    viewController.setColourMap('plain');
-                    console.log('Color map set to grayscale');
+                    // Try to set grayscale - may not work on all DWV versions
+                    try {
+                        const dataIds = this.dwvApp.getDataIds();
+                        if (dataIds && dataIds.length > 0) {
+                            const vc = this.dwvApp.getViewController(dataIds[0]);
+                            if (vc && vc.setColourMap) {
+                                vc.setColourMap('plain');
+                                console.log('Color map set to grayscale');
+                            }
+                        }
+                    } catch (e) {
+                        console.log('Could not set color map:', e.message);
+                    }
                     
                     // Set scroll tool
                     this.dwvApp.setTool('Scroll');
@@ -274,19 +253,31 @@ class DICOMViewer {
         try {
             console.log('Going to slice:', sliceIndex);
             
-            // Get view controller
-            const layerGroup = this.dwvApp.getActiveLayerGroup();
-            const viewLayer = layerGroup.getActiveViewLayer();
-            const viewController = viewLayer.getViewController();
-            
-            // Get current position
-            const currentPos = viewController.getPosition();
-            
-            // Create new position with updated slice
-            const newIndex = new dwv.math.Index([currentPos.get(0), currentPos.get(1), sliceIndex]);
-            
-            // Set new position
-            viewController.setCurrentPosition(newIndex);
+            // Try different DWV API methods
+            const dataIds = this.dwvApp.getDataIds();
+            if (dataIds && dataIds.length > 0) {
+                const dataId = dataIds[0];
+                const vc = this.dwvApp.getViewController(dataId);
+                
+                if (vc && vc.setCurrentPosition) {
+                    // Create position index
+                    const pos = vc.getCurrentPosition();
+                    const newPos = new dwv.math.Index([pos.get(0), pos.get(1), sliceIndex]);
+                    vc.setCurrentPosition(newPos);
+                    console.log('Position set successfully');
+                } else if (vc && vc.incrementSliceNb) {
+                    // Alternative: increment from current
+                    const currentSlice = vc.getCurrentPosition().get(2);
+                    const delta = sliceIndex - currentSlice;
+                    for (let i = 0; i < Math.abs(delta); i++) {
+                        if (delta > 0) {
+                            vc.incrementSliceNb();
+                        } else {
+                            vc.decrementSliceNb();
+                        }
+                    }
+                }
+            }
 
             this.slider.value = sliceIndex;
             this.app.currentSlice = sliceIndex;
@@ -314,15 +305,15 @@ class DICOMViewer {
             console.log(`Applying preset: ${presetName} (C=${preset.center}, W=${preset.width})`);
             
             try {
-                // Get view controller
-                const layerGroup = this.dwvApp.getActiveLayerGroup();
-                const viewLayer = layerGroup.getActiveViewLayer();
-                const viewController = viewLayer.getViewController();
-                
-                // Apply window level
-                viewController.setWindowLevel(preset.center, preset.width);
-                
-                console.log('Preset applied successfully');
+                // Try to get view controller
+                const dataIds = this.dwvApp.getDataIds();
+                if (dataIds && dataIds.length > 0) {
+                    const vc = this.dwvApp.getViewController(dataIds[0]);
+                    if (vc && vc.setWindowLevel) {
+                        vc.setWindowLevel(preset.center, preset.width);
+                        console.log('Preset applied successfully');
+                    }
+                }
             } catch (error) {
                 console.error('Error applying window preset:', error);
             }
