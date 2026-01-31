@@ -245,6 +245,68 @@ class DICOMProcessor:
         # 4. Return as base64 or bytes
         pass
     
+    def get_slice_pixels(self, study_id: str, slice_index: int) -> Dict[str, Any]:
+        """
+        Get raw pixel data for client-side windowing (HIGH QUALITY)
+        Returns pixel array as bytes with metadata for client-side processing
+        """
+        if not DICOM_AVAILABLE:
+            return {
+                "success": False,
+                "error": "DICOM not available"
+            }
+        
+        try:
+            study = self.get_study(study_id)
+            if not study.get('dicom_files') or slice_index >= len(study['dicom_files']):
+                logger.error(f"Invalid slice index: {slice_index}")
+                return {"success": False, "error": "Invalid slice index"}
+            
+            file_path = study['dicom_files'][slice_index]
+            ds = pydicom.dcmread(file_path)
+            
+            # Get pixel array
+            pixel_array = ds.pixel_array.astype(np.float64)
+            
+            # Handle 3D arrays (take first frame)
+            if len(pixel_array.shape) == 3:
+                pixel_array = pixel_array[0]
+            
+            # Apply Rescale Slope/Intercept to get Hounsfield Units
+            rescale_slope = float(getattr(ds, 'RescaleSlope', 1.0))
+            rescale_intercept = float(getattr(ds, 'RescaleIntercept', 0.0))
+            
+            if rescale_slope != 1.0 or rescale_intercept != 0.0:
+                pixel_array = pixel_array * rescale_slope + rescale_intercept
+            
+            logger.info(f"Raw pixel data - Shape: {pixel_array.shape}, Range: {pixel_array.min():.1f} to {pixel_array.max():.1f} HU")
+            
+            # Convert to bytes (preserve full precision)
+            pixel_bytes = pixel_array.astype(np.float32).tobytes()
+            pixel_base64 = base64.b64encode(pixel_bytes).decode('utf-8')
+            
+            return {
+                "success": True,
+                "pixels": pixel_base64,
+                "width": pixel_array.shape[1],
+                "height": pixel_array.shape[0],
+                "min_value": float(pixel_array.min()),
+                "max_value": float(pixel_array.max()),
+                "data_type": "float32",
+                "metadata": {
+                    "rescale_slope": rescale_slope,
+                    "rescale_intercept": rescale_intercept,
+                    "photometric_interpretation": getattr(ds, 'PhotometricInterpretation', 'MONOCHROME2')
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting slice pixels: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
     def get_slice_image(self, study_id: str, slice_index: int, window_center: int = None, window_width: int = None, window_preset: str = None) -> str:
         """
         Get slice image as base64 string for display - HIGH QUALITY

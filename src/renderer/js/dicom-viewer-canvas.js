@@ -8,6 +8,9 @@ class DICOMViewer {
         this.currentImage = null;
         this.currentPreset = 'brain';
         
+        // HIGH QUALITY MODE - use raw pixels instead of PNG
+        this.useRawPixels = true; // Toggle this to switch modes
+        
         // Zoom and pan
         this.zoomLevel = 1.0;
         this.minZoom = 0.5;
@@ -19,7 +22,45 @@ class DICOMViewer {
         this.lastMouseY = 0;
         
         this.setupEventListeners();
-        console.log('DICOMViewer initialized');
+        console.log('DICOMViewer initialized - High Quality Mode:', this.useRawPixels);
+    }
+
+    // CLIENT-SIDE WINDOWING (Lossless Quality)
+    applyWindowLevel(pixelArray, width, height, windowCenter, windowWidth, minValue, maxValue) {
+        /**
+         * Apply window/level transformation to pixel array
+         * Converts Hounsfield Units to 0-255 grayscale
+         * This is done in JavaScript for ZERO quality loss
+         */
+        const minWindow = windowCenter - windowWidth / 2;
+        const maxWindow = windowCenter + windowWidth / 2;
+        
+        // Create ImageData for canvas
+        const imageData = this.ctx.createImageData(width, height);
+        const data = imageData.data;
+        
+        for (let i = 0; i < pixelArray.length; i++) {
+            const pixelValue = pixelArray[i];
+            
+            // Apply windowing
+            let displayValue;
+            if (pixelValue <= minWindow) {
+                displayValue = 0;
+            } else if (pixelValue >= maxWindow) {
+                displayValue = 255;
+            } else {
+                displayValue = ((pixelValue - minWindow) / windowWidth) * 255;
+            }
+            
+            // Set RGB (grayscale)
+            const idx = i * 4;
+            data[idx] = displayValue;     // R
+            data[idx + 1] = displayValue; // G
+            data[idx + 2] = displayValue; // B
+            data[idx + 3] = 255;          // A (fully opaque)
+        }
+        
+        return imageData;
     }
 
     setupEventListeners() {
@@ -125,6 +166,96 @@ class DICOMViewer {
 
     async renderSlice(sliceIndex) {
         console.log(`Rendering slice ${sliceIndex} with preset ${this.currentPreset}`);
+        
+        // HIGH QUALITY PATH: Use raw pixels
+        if (this.useRawPixels) {
+            await this.renderSliceRaw(sliceIndex);
+            return;
+        }
+        
+        // OLD PATH: Use PNG (fallback)
+        this.renderSlicePNG(sliceIndex);
+    }
+
+    async renderSliceRaw(sliceIndex) {
+        /**
+         * HIGH QUALITY RENDERING - Uses raw pixel data
+         * Zero compression artifacts, full precision
+         */
+        console.log('Rendering with RAW PIXELS (high quality)');
+        
+        // Clear canvas
+        this.ctx.fillStyle = '#0a0a0a';
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+        try {
+            // Fetch raw pixel data
+            const response = await window.electronAPI.getSlicePixels(
+                this.app.currentStudy.study_id,
+                sliceIndex
+            );
+
+            if (!response.success) {
+                console.error('Failed to get pixels:', response.error);
+                return;
+            }
+
+            console.log(`Got raw pixels: ${response.width}x${response.height}, range: ${response.min_value.toFixed(1)} to ${response.max_value.toFixed(1)} HU`);
+
+            // Decode base64 to Float32Array
+            const binaryString = atob(response.pixels);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            const pixelArray = new Float32Array(bytes.buffer);
+
+            // Get window preset
+            const presets = {
+                'brain': {center: 40, width: 80},
+                'subdural': {center: 80, width: 200},
+                'bone': {center: 400, width: 1800},
+                'lung': {center: -600, width: 1500},
+                'abdomen': {center: 40, width: 400}
+            };
+            const preset = presets[this.currentPreset];
+
+            // Apply windowing CLIENT-SIDE (lossless)
+            const imageData = this.applyWindowLevel(
+                pixelArray,
+                response.width,
+                response.height,
+                preset.center,
+                preset.width,
+                response.min_value,
+                response.max_value
+            );
+
+            // Create temporary canvas at native resolution
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = response.width;
+            tempCanvas.height = response.height;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.putImageData(imageData, 0, 0);
+
+            // Store for zoom/pan
+            this.currentImage = tempCanvas;
+            
+            // Draw to main canvas
+            this.redrawImage();
+
+            console.log('✅ Raw pixel rendering complete');
+
+        } catch (error) {
+            console.error('Error rendering raw pixels:', error);
+        }
+    }
+
+    async renderSlicePNG(sliceIndex) {
+        /**
+         * OLD RENDERING - Uses PNG (fallback for compatibility)
+         */
+        console.log('Rendering with PNG (legacy mode)');
         
         // Clear canvas
         this.ctx.fillStyle = '#0a0a0a';

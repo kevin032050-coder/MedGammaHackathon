@@ -209,6 +209,22 @@ async def submit_feedback(request: FeedbackRequest):
         logger.error(f"Error submitting feedback: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/get-slice-pixels")
+async def get_slice_pixels(request: GetSliceImageRequest):
+    """Get raw pixel data for high-quality client-side rendering"""
+    try:
+        logger.info(f"Getting raw pixels: study={request.study_id}, slice={request.slice_index}")
+        
+        pixel_data = dicom_processor.get_slice_pixels(
+            request.study_id, 
+            request.slice_index
+        )
+        
+        return pixel_data
+    except Exception as e:
+        logger.error(f"Error getting slice pixels: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/get-slice-image")
 async def get_slice_image(request: GetSliceImageRequest):
     """Get slice image as base64 for display"""

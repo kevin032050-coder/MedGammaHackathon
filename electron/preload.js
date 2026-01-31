@@ -29,6 +29,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getSliceImage: (studyId, sliceIndex, windowCenter, windowWidth, windowPreset) => 
         ipcRenderer.invoke('get-slice-image', studyId, sliceIndex, windowCenter, windowWidth, windowPreset),
     
+    // Get raw slice pixels (high quality)
+    getSlicePixels: (studyId, sliceIndex) => 
+        ipcRenderer.invoke('get-slice-pixels', studyId, sliceIndex),
+    
     // Get DICOM URLs for DWV
     getDicomUrls: (studyId) => ipcRenderer.invoke('get-dicom-urls', studyId),
     

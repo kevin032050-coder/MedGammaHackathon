@@ -202,6 +202,19 @@ ipcMain.handle('get-slice-image', async (event, studyId, sliceIndex, windowCente
     }
 });
 
+ipcMain.handle('get-slice-pixels', async (event, studyId, sliceIndex) => {
+    try {
+        const response = await axios.post(`http://localhost:${PYTHON_PORT}/api/get-slice-pixels`, {
+            study_id: studyId,
+            slice_index: sliceIndex
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Error getting slice pixels:', error);
+        throw error;
+    }
+});
+
 ipcMain.handle('get-dicom-file-data', async (event, studyId) => {
     try {
         const response = await axios.post(`http://localhost:${PYTHON_PORT}/api/get-dicom-file-data`, {
