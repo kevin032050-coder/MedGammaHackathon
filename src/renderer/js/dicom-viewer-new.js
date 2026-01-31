@@ -42,25 +42,43 @@ class DICOMViewer {
 
             // Listen for load complete - THIS IS KEY
             this.dwvApp.addEventListener('loadend', (event) => {
-                console.log('✅ DWV LOADEND - All files loaded!');
+                console.log('✅ DWV LOADEND EVENT:', event);
                 
-                // Get the actual number of slices from DWV
-                const dataIds = this.dwvApp.getDataIds();
-                console.log('Data IDs:', dataIds);
-                
-                if (dataIds.length > 0) {
+                try {
+                    // Get the actual number of slices from DWV
+                    const dataIds = this.dwvApp.getDataIds();
+                    console.log('Data IDs:', dataIds);
+                    
+                    if (dataIds.length === 0) {
+                        console.error('No data IDs found!');
+                        return;
+                    }
+                    
                     const dataId = dataIds[0];
+                    console.log('Using dataId:', dataId);
+                    
                     const layerGroup = this.dwvApp.getLayerGroupByDataId(dataId);
+                    console.log('Layer group:', layerGroup);
+                    
                     const viewLayer = layerGroup.getActiveViewLayer();
+                    console.log('View layer:', viewLayer);
+                    
                     const viewController = viewLayer.getViewController();
+                    console.log('View controller:', viewController);
                     
                     // Get image size
                     const image = this.dwvApp.getImage(dataId);
-                    const geometry = image.getGeometry();
-                    const size = geometry.getSize();
-                    const numberOfSlices = size.get(2); // Z dimension
+                    console.log('Image:', image);
                     
-                    console.log('Image loaded - slices:', numberOfSlices);
+                    const geometry = image.getGeometry();
+                    console.log('Geometry:', geometry);
+                    
+                    const size = geometry.getSize();
+                    console.log('Size object:', size);
+                    console.log('Size values:', size.getValues());
+                    
+                    const numberOfSlices = size.getValues()[2] || 1; // Z dimension
+                    console.log('Number of slices:', numberOfSlices);
                     
                     // Update slider
                     this.slider.disabled = false;
@@ -69,16 +87,30 @@ class DICOMViewer {
                     this.slider.value = 0;
                     this.updateSliceInfo(0);
                     
+                    console.log('Slider configured:', {
+                        min: this.slider.min,
+                        max: this.slider.max,
+                        value: this.slider.value
+                    });
+                    
                     // Set grayscale color map
                     viewController.setColourMap('plain');
+                    console.log('Color map set to grayscale');
                     
                     // Set scroll tool
                     this.dwvApp.setTool('Scroll');
+                    console.log('Scroll tool activated');
                     
                     // Apply window preset
-                    setTimeout(() => this.applyWindowPreset(this.currentPreset), 200);
+                    setTimeout(() => {
+                        console.log('Applying window preset...');
+                        this.applyWindowPreset(this.currentPreset);
+                    }, 300);
                     
                     this.app.showToast(`Loaded ${numberOfSlices} slices successfully!`, 'success');
+                    
+                } catch (error) {
+                    console.error('Error in loadend handler:', error);
                 }
             });
             
