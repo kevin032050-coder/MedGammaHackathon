@@ -144,29 +144,29 @@ class DICOMViewer {
             await this.initDWV();
             console.log('DWV ready');
             
-            // Get DICOM file URLs from backend
-            console.log('Fetching DICOM URLs for study:', study.study_id);
-            const response = await window.electronAPI.getDicomUrls(study.study_id);
-            console.log('Backend response:', response);
+            // Get raw DICOM file data from backend
+            console.log('Fetching DICOM file data for study:', study.study_id);
+            const fileBuffers = await this.getDicomFileData(study.study_id);
             
-            if (!response.success || !response.urls || response.urls.length === 0) {
-                throw new Error('No URLs returned from backend');
+            if (!fileBuffers || fileBuffers.length === 0) {
+                throw new Error('No file data returned from backend');
             }
             
-            console.log('Loading', response.urls.length, 'DICOM files into DWV');
-            console.log('First 3 URLs:', response.urls.slice(0, 3));
+            console.log('Got', fileBuffers.length, 'DICOM file buffers');
             
-            // Test first URL
-            console.log('Testing first URL:', response.urls[0]);
-            const testResponse = await fetch(response.urls[0]);
-            console.log('Test response status:', testResponse.status);
-            console.log('Test response headers:', [...testResponse.headers.entries()]);
+            // Convert buffers to File objects for DWV
+            const files = fileBuffers.map((buffer, index) => {
+                return new File([buffer], `slice_${index}.dcm`, { type: 'application/dicom' });
+            });
+            
+            console.log('Created', files.length, 'File objects');
             
             // Reset DWV before loading
             this.dwvApp.reset();
             
-            // Load DICOM files with DWV
-            this.dwvApp.loadURLs(response.urls);
+            // Load DICOM files with DWV using File objects
+            console.log('Loading files into DWV...');
+            this.dwvApp.loadFiles(files);
 
             // Configure slider
             const numSlices = study.num_slices;
@@ -185,6 +185,23 @@ class DICOMViewer {
             console.error('Error loading study with DWV:', error);
             this.app.showToast('Error loading DICOM files: ' + error.message, 'error');
         }
+    }
+
+    async getDicomFileData(studyId) {
+        // Get raw DICOM file data as array buffers
+        const response = await window.electronAPI.getDicomFileData(studyId);
+        if (response.success) {
+            // Convert base64 to ArrayBuffer
+            return response.files.map(base64 => {
+                const binaryString = atob(base64);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+                return bytes.buffer;
+            });
+        }
+        throw new Error('Failed to get DICOM file data');
     }
 
     goToSlice(sliceIndex) {

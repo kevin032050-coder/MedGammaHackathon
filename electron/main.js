@@ -202,6 +202,18 @@ ipcMain.handle('get-slice-image', async (event, studyId, sliceIndex, windowCente
     }
 });
 
+ipcMain.handle('get-dicom-file-data', async (event, studyId) => {
+    try {
+        const response = await axios.post(`http://localhost:${PYTHON_PORT}/api/get-dicom-file-data`, {
+            study_id: studyId
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Error getting DICOM file data:', error);
+        throw error;
+    }
+});
+
 ipcMain.handle('get-dicom-urls', async (event, studyId) => {
     try {
         const response = await axios.post(`http://localhost:${PYTHON_PORT}/api/get-dicom-urls`, {

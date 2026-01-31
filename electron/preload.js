@@ -30,5 +30,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.invoke('get-slice-image', studyId, sliceIndex, windowCenter, windowWidth, windowPreset),
     
     // Get DICOM URLs for DWV
-    getDicomUrls: (studyId) => ipcRenderer.invoke('get-dicom-urls', studyId)
+    getDicomUrls: (studyId) => ipcRenderer.invoke('get-dicom-urls', studyId),
+    
+    // Get DICOM file data for DWV
+    getDicomFileData: (studyId) => ipcRenderer.invoke('get-dicom-file-data', studyId)
 });
