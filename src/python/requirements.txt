@@ -1,0 +1,22 @@
+# FastAPI Backend
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.5.3
+
+# DICOM Processing
+pydicom==2.4.4
+pillow==10.2.0
+numpy==1.26.3
+
+# Med Gemma Model
+# Note: Med Gemma requires specific setup - adjust based on actual model requirements
+# transformers==4.36.2
+# torch==2.1.2
+# or tensorflow==2.15.0
+
+# For now, using placeholder for Med Gemma
+# Will be replaced with actual Med Gemma installation instructions
+
+# Utilities
+python-multipart==0.0.6
+aiofiles==23.2.1
