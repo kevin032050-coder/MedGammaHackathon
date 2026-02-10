@@ -12,9 +12,7 @@ aiofiles==23.2.1
 pydicom==2.4.4              # DICOM file parsing
 pillow==10.2.0              # Image processing
 numpy>=1.24.0,<2.0.0        # Numerical computing (use pre-built wheels)
-
-# Optional: Image Enhancement
-# scipy>=1.11.0             # Uncomment if using advanced filters
+scipy>=1.11.0               # Image enhancement and interpolation
 
 # Med Gemma Model (Placeholder)
 # =================================
