@@ -83,15 +83,20 @@ class DICOMProcessor:
                 logger.warning(f"No DICOM files found in {folder_path}")
                 return await self._load_mock_study(folder_path)
             
+            dicom_files = [
+                fp for fp in dicom_files
+                if fp.lower().endswith(".dcm")
+            ]
+            
             logger.info(f"Found {len(dicom_files)} DICOM files")
             
             # Read first file for metadata
-            first_ds = pydicom.dcmread(dicom_files[0], stop_before_pixels=True)
+            first_ds = pydicom.dcmread(dicom_files[0], stop_before_pixels=True, force=True)
             
             # Sort files by Instance Number or Slice Location
             sorted_files = []
             for file_path in dicom_files:
-                ds = pydicom.dcmread(file_path, stop_before_pixels=True)
+                ds = pydicom.dcmread(file_path, stop_before_pixels=True, force=True)
                 instance_number = getattr(ds, 'InstanceNumber', 0)
                 slice_location = getattr(ds, 'SliceLocation', 0)
                 sorted_files.append((instance_number, slice_location, file_path))
@@ -263,7 +268,7 @@ class DICOMProcessor:
                 return {"success": False, "error": "Invalid slice index"}
             
             file_path = study['dicom_files'][slice_index]
-            ds = pydicom.dcmread(file_path)
+            ds = pydicom.dcmread(file_path, force=True)
             
             # Get pixel array
             pixel_array = ds.pixel_array.astype(np.float64)
@@ -321,7 +326,7 @@ class DICOMProcessor:
                 return None
             
             file_path = study['dicom_files'][slice_index]
-            ds = pydicom.dcmread(file_path)
+            ds = pydicom.dcmread(file_path, force=True)
             
             # Get pixel array with proper data type
             pixel_array = ds.pixel_array.astype(np.float64)
@@ -404,7 +409,7 @@ class DICOMProcessor:
                 return None
             
             file_path = study['dicom_files'][slice_index]
-            ds = pydicom.dcmread(file_path)
+            ds = pydicom.dcmread(file_path, force=True)
             
             # Get pixel array with proper data type
             pixel_array = ds.pixel_array.astype(np.float64)  # Use float64 for precision

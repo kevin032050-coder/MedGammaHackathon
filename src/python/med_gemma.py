@@ -1,217 +1,204 @@
-"""
-Med Gemma Model Interface
-Handles loading and inference with Google's Med Gemma model
-"""
+# src/python/med_gemma.py
+from __future__ import annotations
 
-import logging
-from typing import Dict, List, Any, Optional
-import asyncio
+import json
+import re
+import time
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple
 
-logger = logging.getLogger(__name__)
+import torch
+from PIL import Image
+from transformers import pipeline
 
-class MedGemmaModel:
-    """Interface for Med Gemma model operations"""
-    
-    def __init__(self):
-        self.model = None
-        self.loaded = False
-    
-    async def load_model(self):
-        """Load Med Gemma model"""
-        logger.info("Loading Med Gemma model...")
-        
+
+TRIAGE_MODEL_ID = "google/medgemma-1.5-4b-it"
+
+
+@dataclass
+class SliceTriage:
+    slice_index: int
+    priority: str  # "CRITICAL" | "URGENT" | "ROUTINE"
+    rationale: str
+    attention_areas: List[Dict[str, Any]]  # [{"region": "...", "concern": "...", "confidence": 0-1}, ...]
+
+
+class MedGemmaClient:
+    """
+    Minimal MedGemma wrapper for your PACS triage use case.
+    """
+
+    def __init__(self, model_id: str = TRIAGE_MODEL_ID):
+        self.model_id = model_id
+        self._pipe = None
+
+    def load(self) -> None:
+        if self._pipe is not None:
+            return
+
+        print("MedGemma: starting pipeline load...")
+
+        dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        # NOTE: transformers pipeline device handling:
+        # - device=0 for first GPU, or -1 for CPU
+        # Some versions accept "cuda"/"cpu", but ints are safest.
+        pipe_device = 0 if device == "cuda" else -1
+
+        self._pipe = pipeline(
+            "image-text-to-text",
+            model=self.model_id,
+            torch_dtype=dtype,
+            device=pipe_device,
+        )
+
+        print("MedGemma: pipeline loaded.")
+
+    def _extract_json(self, s: str) -> Dict[str, Any]:
+        """
+        Med models sometimes wrap JSON in text. We robustly pull the first {...} block.
+        """
+        s = (s or "").strip()
+
+        # Try direct parse
         try:
-            # TODO: Implement actual Med Gemma loading
-            # This will depend on the specific Med Gemma implementation
-            # Options:
-            # 1. Hugging Face transformers
-            # 2. TensorFlow/PyTorch direct
-            # 3. ONNX runtime
-            
-            # Placeholder for actual implementation
-            # from transformers import AutoModelForCausalLM, AutoTokenizer
-            # self.model = AutoModelForCausalLM.from_pretrained("google/med-gemma-2b")
-            # self.tokenizer = AutoTokenizer.from_pretrained("google/med-gemma-2b")
-            
-            # For now, simulate successful loading
-            await asyncio.sleep(1)  # Simulate loading time
-            self.loaded = True
-            logger.info("Med Gemma model loaded (mock mode)")
-            
-        except Exception as e:
-            logger.error(f"Failed to load Med Gemma model: {str(e)}")
-            raise
-    
-    def is_loaded(self) -> bool:
-        """Check if model is loaded"""
-        return self.loaded
-    
-    async def analyze_study(self, study_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Analyze entire DICOM study
-        Returns: priority, findings, confidence scores
-        """
-        logger.info(f"Analyzing study: {study_data.get('study_id')}")
-        
-        # TODO: Implement actual Med Gemma inference
-        # This would involve:
-        # 1. Preprocessing DICOM images
-        # 2. Running model inference
-        # 3. Post-processing results
-        
-        # Mock response for now
-        return {
-            "priority": "CRITICAL",
-            "confidence": 0.92,
-            "reasoning": "Large hyperdensity detected in right hemisphere consistent with acute hemorrhage",
-            "findings": [
-                {
-                    "type": "hemorrhage",
-                    "location": "right temporal lobe",
-                    "slice_range": [15, 22],
-                    "severity": "severe",
-                    "confidence": 0.94,
-                    "bbox": {"x": 120, "y": 85, "width": 45, "height": 52}
-                }
-            ],
-            "estimated_time_saved": "4 minutes"
-        }
-    
-    async def analyze_slice(self, slice_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Analyze specific slice
-        Returns: findings on this slice with bounding boxes
-        """
-        slice_index = slice_data.get('slice_index', 0)
-        logger.info(f"Analyzing slice {slice_index}")
-        
-        # Mock response
-        # In real implementation, would run Med Gemma on single slice
-        if 15 <= slice_index <= 22:
-            return {
-                "has_findings": True,
-                "findings": [
-                    {
-                        "type": "hemorrhage",
-                        "confidence": 0.94,
-                        "bbox": {"x": 120, "y": 85, "width": 45, "height": 52},
-                        "description": "Hyperdense region consistent with acute hemorrhage"
-                    }
-                ],
-                "attention_areas": [
-                    {"x": 120, "y": 85, "width": 45, "height": 52, "importance": 0.95}
-                ]
-            }
-        else:
-            return {
-                "has_findings": False,
-                "findings": [],
-                "attention_areas": []
-            }
-    
-    async def chat(self, query: str, context: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Handle conversational queries about the study
-        """
-        logger.info(f"Chat query: {query}")
-        
-        # TODO: Implement actual Med Gemma chat inference
-        # Would use Med Gemma's instruction-following capabilities
-        
-        # Mock response with keyword matching
-        query_lower = query.lower()
-        
-        if "bleed" in query_lower or "hemorrhage" in query_lower:
-            response = {
-                "answer": "Based on the imaging, there is evidence of acute hemorrhage in the right temporal lobe (slices 15-22). The hyperdensity pattern and location suggest recent bleeding. This finding requires urgent attention.",
-                "references": [
-                    {"type": "slice", "value": 18, "description": "Maximal hyperdensity visible"},
-                    {"type": "finding", "value": "hemorrhage", "confidence": 0.94}
-                ],
-                "confidence": 0.92,
-                "mode": context.get("mode", "radiologist")
-            }
-        elif "slice" in query_lower:
-            response = {
-                "answer": "The most significant findings are concentrated on slices 15-22, with maximal abnormality on slice 18. Would you like me to jump to that slice?",
-                "references": [
-                    {"type": "slice", "value": 18, "description": "Peak finding location"}
-                ],
-                "confidence": 0.88
-            }
-        else:
-            response = {
-                "answer": "I can help you analyze this study. The main finding is an acute hemorrhage in the right temporal lobe. What specific aspect would you like to know more about?",
-                "references": [],
-                "confidence": 0.85
-            }
-        
-        return response
-    
-    async def detect_incidental_findings(self, study_data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """
-        Detect incidental findings that may not be primary pathology
-        """
-        logger.info("Detecting incidental findings")
-        
-        # TODO: Implement actual Med Gemma incidental finding detection
-        
-        # Mock response
-        return [
+            return json.loads(s)
+        except Exception:
+            pass
+
+        # Try to find first JSON object
+        m = re.search(r"\{.*\}", s, flags=re.DOTALL)
+        if not m:
+            return {"error": "no_json_found", "raw": s}
+
+        candidate = m.group(0)
+        try:
+            return json.loads(candidate)
+        except Exception:
+            return {"error": "json_parse_failed", "raw": s, "candidate": candidate}
+
+    def triage_slice(
+        self,
+        image: Image.Image,
+        slice_index: int,
+        prompt: Optional[str] = None,
+        max_new_tokens: int = 128,
+    ) -> SliceTriage:
+        self.load()
+
+        t0 = time.time()
+        print(f"[medgemma] running inference for slice {slice_index}...")
+
+        # Keep prompt extremely constrained (you want deterministic-ish JSON)
+        prompt = prompt or """
+You are an AI assistant helping an emergency radiology triage workflow.
+You MUST output valid JSON only (no markdown, no extra text).
+
+Task: Given this CT/MRI slice image, assign triage priority.
+Allowed priority values: "CRITICAL", "URGENT", "ROUTINE".
+
+Return JSON with keys:
+- "priority": one of ["CRITICAL","URGENT","ROUTINE"]
+- "rationale": short reason (1-2 sentences)
+- "attention_areas": array of up to 3 objects, each with:
+    - "region": anatomical region description (e.g., "right temporal lobe", "midline", "left lung apex")
+    - "concern": what might need attention (short)
+    - "confidence": number 0 to 1 (rough confidence)
+
+If nothing concerning: priority="ROUTINE" and attention_areas=[].
+""".strip()
+
+        messages = [
             {
-                "type": "lung_nodule",
-                "location": "right upper lobe",
-                "size_mm": 4,
-                "slice": 8,
-                "risk_category": "time-dependent",
-                "recommendation": "Follow-up CT in 6 months recommended per Fleischner criteria",
-                "confidence": 0.87
-            },
-            {
-                "type": "calcification",
-                "location": "carotid artery",
-                "severity": "mild",
-                "slice": 12,
-                "risk_category": "incidental",
-                "recommendation": "Correlate with cardiovascular risk factors",
-                "confidence": 0.91
+                "role": "user",
+                "content": [
+                    {"type": "image", "image": image},
+                    {"type": "text", "text": prompt},
+                ],
             }
         ]
-    
-    async def generate_report(self, study_data: Dict[str, Any], user_findings: Optional[str] = None) -> Dict[str, Any]:
+
+        # IMPORTANT:
+        # Don't pass max_length alongside max_new_tokens (it causes the warning you saw).
+        out = self._pipe(
+            text=messages,
+            max_new_tokens=max_new_tokens,
+            do_sample=False,
+        )
+
+        print(f"[medgemma] inference done for slice {slice_index} in {time.time() - t0:.2f}s")
+
+        generated = out[0].get("generated_text")
+        if (
+            isinstance(generated, list)
+            and len(generated) > 0
+            and isinstance(generated[-1], dict)
+        ):
+            text = generated[-1].get("content", "")
+        else:
+            text = str(generated)
+
+        payload = self._extract_json(text)
+
+        priority = str(payload.get("priority", "ROUTINE")).upper()
+        if priority not in {"CRITICAL", "URGENT", "ROUTINE"}:
+            priority = "ROUTINE"
+
+        rationale = payload.get("rationale", "") or ""
+        attention = payload.get("attention_areas", [])
+        if not isinstance(attention, list):
+            attention = []
+
+        return SliceTriage(
+            slice_index=slice_index,
+            priority=priority,
+            rationale=rationale,
+            attention_areas=attention,
+        )
+
+    def triage_study(
+        self,
+        images_by_index: List[Tuple[int, Image.Image]],
+        per_slice_limit: int = 24,
+    ) -> Dict[str, Any]:
         """
-        Generate structured radiology report
+        For speed: only triage up to N slices (sample across the stack).
+        Returns:
+          patient_priority + list of per-slice triage
         """
-        logger.info("Generating report")
-        
-        # TODO: Implement actual Med Gemma report generation
-        
-        # Mock report
-        return {
-            "clinical_history": study_data.get("clinical_context", "Trauma protocol"),
-            "technique": f"{study_data.get('modality', 'CT')} of the head without contrast",
-            "ai_suggested_findings": """
-BRAIN: Large area of hyperdensity in the right temporal lobe measuring approximately 4.5 x 5.2 cm, consistent with acute hemorrhage. Mass effect with 3mm midline shift to the left. Surrounding edema present.
+        self.load()
 
-VENTRICLES: Mild effacement of the right lateral ventricle. No hydrocephalus.
-
-EXTRA-AXIAL SPACES: No subdural or epidural collections identified.
-
-SKULL: No fracture identified.
-            """.strip(),
-            "impression": "Acute right temporal lobe hemorrhage with mass effect. Urgent neurosurgical consultation recommended.",
-            "severity_scores": {
-                "ASPECTS": 8,
-                "confidence": 0.89
+        if not images_by_index:
+            return {
+                "patient_priority": "ROUTINE",
+                "patient_rationale": "No images provided.",
+                "slice_triage": [],
             }
+
+        # Sample evenly across the study for demo-speed
+        if len(images_by_index) > per_slice_limit:
+            step = max(1, len(images_by_index) // per_slice_limit)
+            sampled = images_by_index[::step][:per_slice_limit]
+        else:
+            sampled = images_by_index
+
+        slice_results: List[SliceTriage] = []
+        worst = "ROUTINE"
+        order = {"ROUTINE": 0, "URGENT": 1, "CRITICAL": 2}
+
+        for idx, img in sampled:
+            r = self.triage_slice(img, idx)
+            slice_results.append(r)
+            if order.get(r.priority, 0) > order.get(worst, 0):
+                worst = r.priority
+
+        patient_rationale = f"Derived from highest slice priority among {len(sampled)} sampled slices."
+
+        return {
+            "patient_priority": worst,
+            "patient_rationale": patient_rationale,
+            "slice_triage": [r.__dict__ for r in slice_results],
+            "slice_triage_sampled_count": len(sampled),
+            "slice_triage_total_slices": len(images_by_index),
         }
-    
-    def _apply_safety_filter(self, response: str) -> str:
-        """
-        Filter response to ensure safety guidelines
-        - No absolute diagnostic statements
-        - No treatment recommendations
-        - Always assistive language
-        """
-        # TODO: Implement safety filtering logic
-        return response

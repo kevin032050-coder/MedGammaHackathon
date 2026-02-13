@@ -7,10 +7,10 @@ class DICOMViewer {
         this.slider = document.getElementById('slice-slider');
         this.currentImage = null;
         this.currentPreset = 'brain';
-        
+
         // HIGH QUALITY MODE - use raw pixels instead of PNG
         this.useRawPixels = true; // Toggle this to switch modes
-        
+
         // Zoom and pan
         this.zoomLevel = 1.0;
         this.minZoom = 0.5;
@@ -20,7 +20,7 @@ class DICOMViewer {
         this.isDragging = false;
         this.lastMouseX = 0;
         this.lastMouseY = 0;
-        
+
         this.setupEventListeners();
         console.log('DICOMViewer initialized - High Quality Mode:', this.useRawPixels);
     }
@@ -34,14 +34,14 @@ class DICOMViewer {
          */
         const minWindow = windowCenter - windowWidth / 2;
         const maxWindow = windowCenter + windowWidth / 2;
-        
+
         // Create ImageData for canvas
         const imageData = this.ctx.createImageData(width, height);
         const data = imageData.data;
-        
+
         for (let i = 0; i < pixelArray.length; i++) {
             const pixelValue = pixelArray[i];
-            
+
             // Apply windowing
             let displayValue;
             if (pixelValue <= minWindow) {
@@ -51,7 +51,7 @@ class DICOMViewer {
             } else {
                 displayValue = ((pixelValue - minWindow) / windowWidth) * 255;
             }
-            
+
             // Set RGB (grayscale)
             const idx = i * 4;
             data[idx] = displayValue;     // R
@@ -59,14 +59,14 @@ class DICOMViewer {
             data[idx + 2] = displayValue; // B
             data[idx + 3] = 255;          // A (fully opaque)
         }
-        
+
         return imageData;
     }
 
     setupEventListeners() {
         // Slice slider
         this.slider.addEventListener('input', (e) => {
-            this.goToSlice(parseInt(e.target.value));
+            this.goToSlice(parseInt(e.target.value, 10));
         });
 
         // Window preset buttons
@@ -74,7 +74,7 @@ class DICOMViewer {
             btn.addEventListener('click', (e) => {
                 document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
                 e.target.classList.add('active');
-                
+
                 this.currentPreset = e.target.dataset.preset;
                 this.goToSlice(this.app.currentSlice); // Reload with new preset
             });
@@ -130,7 +130,7 @@ class DICOMViewer {
 
     loadStudy(study) {
         console.log('Loading study:', study);
-        
+
         // Configure canvas
         this.canvas.width = 768;
         this.canvas.height = 768;
@@ -148,6 +148,29 @@ class DICOMViewer {
         this.goToSlice(0);
     }
 
+    getSlicePriority(sliceIndex) {
+        const a = this.app.currentStudy?.analysis;
+        const map = a?.slice_priority_map;
+
+        // NOTE: your current slice_priority_map seems to be an array like:
+        // [{slice_index: 0, priority: 'ROUTINE'}, ...]
+        // but your old code assumes map[sliceIndex] aligns by index.
+        //
+        // This version supports BOTH shapes:
+        // 1) map[sliceIndex] exists and is correct
+        // 2) map is a list of objects with slice_index fields
+        if (!map) return 'ROUTINE';
+
+        // Shape 1: direct index lookup
+        if (map[sliceIndex] && map[sliceIndex].priority) {
+            return map[sliceIndex].priority || 'ROUTINE';
+        }
+
+        // Shape 2: find by slice_index
+        const hit = map.find?.(x => x.slice_index === sliceIndex);
+        return hit?.priority || 'ROUTINE';
+    }
+
     async goToSlice(sliceIndex) {
         if (!this.app.currentStudy) return;
 
@@ -160,19 +183,24 @@ class DICOMViewer {
         // Update counter
         document.getElementById('slice-counter').textContent = `Slice ${sliceIndex + 1} / ${numSlices}`;
 
+        // Replace text instead of accumulating
+        const p = this.getSlicePriority(sliceIndex);
+        const el = document.getElementById('resolution-info');
+        if (el) el.textContent = p;
+
         // Render slice
         await this.renderSlice(sliceIndex);
     }
 
     async renderSlice(sliceIndex) {
         console.log(`Rendering slice ${sliceIndex} with preset ${this.currentPreset}`);
-        
+
         // HIGH QUALITY PATH: Use raw pixels
         if (this.useRawPixels) {
             await this.renderSliceRaw(sliceIndex);
             return;
         }
-        
+
         // OLD PATH: Use PNG (fallback)
         this.renderSlicePNG(sliceIndex);
     }
@@ -183,7 +211,7 @@ class DICOMViewer {
          * Zero compression artifacts, full precision
          */
         console.log('Rendering with RAW PIXELS (high quality)');
-        
+
         // Clear canvas
         this.ctx.fillStyle = '#0a0a0a';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
@@ -200,7 +228,9 @@ class DICOMViewer {
                 return;
             }
 
-            console.log(`Got raw pixels: ${response.width}x${response.height}, range: ${response.min_value.toFixed(1)} to ${response.max_value.toFixed(1)} HU`);
+            console.log(
+                `Got raw pixels: ${response.width}x${response.height}, range: ${response.min_value.toFixed(1)} to ${response.max_value.toFixed(1)} HU`
+            );
 
             // Decode base64 to Float32Array
             const binaryString = atob(response.pixels);
@@ -212,13 +242,13 @@ class DICOMViewer {
 
             // Get window preset
             const presets = {
-                'brain': {center: 40, width: 80},
-                'subdural': {center: 80, width: 200},
-                'bone': {center: 400, width: 1800},
-                'lung': {center: -600, width: 1500},
-                'abdomen': {center: 40, width: 400}
+                brain: { center: 40, width: 80 },
+                subdural: { center: 80, width: 200 },
+                bone: { center: 400, width: 1800 },
+                lung: { center: -600, width: 1500 },
+                abdomen: { center: 40, width: 400 }
             };
-            const preset = presets[this.currentPreset];
+            const preset = presets[this.currentPreset] || presets.brain;
 
             // Apply windowing CLIENT-SIDE (lossless)
             const imageData = this.applyWindowLevel(
@@ -240,12 +270,11 @@ class DICOMViewer {
 
             // Store for zoom/pan
             this.currentImage = tempCanvas;
-            
+
             // Draw to main canvas
             this.redrawImage();
 
             console.log('✅ Raw pixel rendering complete');
-
         } catch (error) {
             console.error('Error rendering raw pixels:', error);
         }
@@ -256,7 +285,7 @@ class DICOMViewer {
          * OLD RENDERING - Uses PNG (fallback for compatibility)
          */
         console.log('Rendering with PNG (legacy mode)');
-        
+
         // Clear canvas
         this.ctx.fillStyle = '#0a0a0a';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);

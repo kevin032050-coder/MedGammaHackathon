@@ -78,6 +78,12 @@
     color: white;
 }
 
+.priority-badge.processing { background: #555; }
+.worklist-item.priority-processing { border-left: 4px solid #777; }
+
+.priority-badge.error { background: #b00020; }
+.worklist-item.priority-error { border-left: 4px solid #b00020; }
+
 .patient-meta {
     font-size: 11px;
     color: var(--text-secondary);

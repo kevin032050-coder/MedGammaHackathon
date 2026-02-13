@@ -26,11 +26,11 @@ class WorklistManager {
     sortWorklist() {
         if (this.app.aiPriorityEnabled) {
             // Sort by priority: Critical > Urgent > Routine
-            const priorityOrder = { 'CRITICAL': 0, 'URGENT': 1, 'ROUTINE': 2 };
+            const priorityOrder = { 'CRITICAL': 0, 'URGENT': 1, 'ROUTINE': 2, 'PROCESSING': 3, 'ERROR': 4 };
             this.studies.sort((a, b) => {
-                const aPriority = a.analysis ? priorityOrder[a.analysis.priority] || 3 : 3;
-                const bPriority = b.analysis ? priorityOrder[b.analysis.priority] || 3 : 3;
-                return aPriority - bPriority;
+                const aPriority = a.analysis ? priorityOrder[String(a.analysis.priority).toUpperCase()] ?? 3 : 3;
+                const bPriority = b.analysis ? priorityOrder[String(b.analysis.priority).toUpperCase()] ?? 3 : 3;
+                return aPriority - bPriority;   
             });
         } else {
             // Sort by study date/time
@@ -66,39 +66,65 @@ class WorklistManager {
 
     createStudyItem(study) {
         const analysis = study.analysis;
-        const priority = analysis ? analysis.priority : 'ROUTINE';
-        const confidence = analysis ? analysis.confidence : 0;
-        const reasoning = analysis ? analysis.reasoning : 'Pending analysis';
 
-        const isActive = this.app.currentStudy && this.app.currentStudy.study_id === study.study_id;
+        // Default state when analysis not present yet
+        const priorityRaw = analysis?.priority ?? "PROCESSING"; // <-- change default
+        const priority = String(priorityRaw).toUpperCase();
+
+        const confidence = typeof analysis?.confidence === "number" ? analysis.confidence : null;
+        const reasoning = analysis?.reasoning ?? "AI is analyzing this study…";
+
+        const isActive =
+            this.app.currentStudy && this.app.currentStudy.study_id === study.study_id;
+
+        // Badge label (what you display)
+        const badgeText =
+            priority === "PROCESSING" ? "PROCESSING…" :
+            priority === "ERROR" ? "ERROR" :
+            priority;
+
+        // Class name used for CSS. Map special states to something safe.
+        const priorityClass =
+            priority === "PROCESSING" ? "processing" :
+            priority === "ERROR" ? "error" :
+            priority.toLowerCase(); // critical/urgent/routine
 
         return `
-            <div class="worklist-item priority-${priority.toLowerCase()} ${isActive ? 'active' : ''}" 
-                 data-study-id="${study.study_id}">
-                <div class="study-header">
-                    <span class="study-modality">${study.study_info.modality} ${study.study_info.body_part}</span>
-                    <span class="priority-badge ${priority.toLowerCase()}">${priority}</span>
+            <div class="worklist-item priority-${priorityClass} ${isActive ? 'active' : ''}"
+                data-study-id="${study.study_id}">
+            <div class="study-header">
+                <span class="study-modality">${study.study_info.modality} ${study.study_info.body_part}</span>
+                <span class="priority-badge ${priorityClass}">${badgeText}</span>
+            </div>
+
+            <div class="patient-meta">
+                ${study.patient.name} | ${study.patient.age}y ${study.patient.sex}
+            </div>
+            <div class="patient-meta">
+                ${study.study_info.study_date} ${study.study_info.study_time}
+            </div>
+
+            ${analysis ? `
+                <div class="ai-reason">
+                AI: ${reasoning}
                 </div>
-                <div class="patient-meta">
-                    ${study.patient.name} | ${study.patient.age}y ${study.patient.sex}
-                </div>
-                <div class="patient-meta">
-                    ${study.study_info.study_date} ${study.study_info.study_time}
-                </div>
-                ${analysis ? `
-                    <div class="ai-reason">
-                        AI: ${reasoning}
+
+                ${confidence === null ? "" : `
+                <div class="confidence-bar-container">
+                    <div class="confidence-label">Confidence: ${Math.round(confidence * 100)}%</div>
+                    <div class="confidence-bar">
+                    <div class="confidence-fill" style="width: ${confidence * 100}%"></div>
                     </div>
-                    <div class="confidence-bar-container">
-                        <div class="confidence-label">Confidence: ${Math.round(confidence * 100)}%</div>
-                        <div class="confidence-bar">
-                            <div class="confidence-fill" style="width: ${confidence * 100}%"></div>
-                        </div>
-                    </div>
-                ` : ''}
+                </div>
+                `}
+            ` : `
+                <div class="ai-reason">
+                AI: ${reasoning}
+                </div>
+            `}
             </div>
         `;
-    }
+        }
 
     selectStudy(studyId) {
         const study = this.studies.find(s => s.study_id === studyId);
