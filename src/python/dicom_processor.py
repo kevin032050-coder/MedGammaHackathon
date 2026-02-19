@@ -142,14 +142,6 @@ class DICOMProcessor:
                         "pixel_spacing": list(getattr(first_ds, 'PixelSpacing', [0.5, 0.5]))
                     }
                 ],
-                "clinical_context": {
-                    "indication": "Head trauma",
-                    "vitals": {
-                        "gcs": 14,
-                        "bp": "140/90",
-                        "hr": 88
-                    }
-                },
                 "num_slices": len(sorted_file_paths)
             }
             
@@ -196,14 +188,6 @@ class DICOMProcessor:
                     "pixel_spacing": [0.5, 0.5]
                 }
             ],
-            "clinical_context": {
-                "indication": "Head trauma",
-                "vitals": {
-                    "gcs": 14,
-                    "bp": "140/90",
-                    "hr": 88
-                }
-            },
             "num_slices": 40
         }
         

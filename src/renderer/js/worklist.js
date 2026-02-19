@@ -26,10 +26,10 @@ class WorklistManager {
     sortWorklist() {
         if (this.app.aiPriorityEnabled) {
             // Sort by priority: Critical > Urgent > Routine
-            const priorityOrder = { 'CRITICAL': 0, 'URGENT': 1, 'ROUTINE': 2, 'PROCESSING': 3, 'ERROR': 4 };
+            const priorityOrder = { 'PROCESSING': 0,  'ERROR': 1 , 'CRITICAL': 2, 'URGENT': 3, 'ROUTINE': 4 };
             this.studies.sort((a, b) => {
-                const aPriority = a.analysis ? priorityOrder[String(a.analysis.priority).toUpperCase()] ?? 3 : 3;
-                const bPriority = b.analysis ? priorityOrder[String(b.analysis.priority).toUpperCase()] ?? 3 : 3;
+                const aPriority = a.analysis ? priorityOrder[String(a.analysis.priority).toUpperCase()] ?? 5 : 5;
+                const bPriority = b.analysis ? priorityOrder[String(b.analysis.priority).toUpperCase()] ?? 5 : 5;
                 return aPriority - bPriority;   
             });
         } else {
