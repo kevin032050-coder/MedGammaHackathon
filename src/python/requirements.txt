@@ -1,22 +1,73 @@
-# FastAPI Backend
+# ============================================
+# Python Requirements for MedGemma PACS
+# ============================================
+# These are all the Python libraries needed to run the backend server
+# Installation: pip install -r requirements.txt
+# Python version required: 3.9, 3.10, or 3.11
+
+# ============================================
+# Web Server (FastAPI + Uvicorn)
+# ============================================
+# FastAPI - Modern web framework for building APIs
 fastapi==0.109.0
+
+# Uvicorn - Lightning-fast ASGI server to run FastAPI
 uvicorn[standard]==0.27.0
+
+# Pydantic - Data validation using Python type annotations
 pydantic==2.5.3
 
-# DICOM Processing
+# ============================================
+# Medical Image Processing (DICOM)
+# ============================================
+# pydicom - Read and parse DICOM medical imaging files
 pydicom==2.4.4
+
+# Pillow - Image processing and manipulation
 pillow==10.2.0
-numpy>=1.24.0
 
-# Med Gemma Model
-# Note: Med Gemma requires specific setup - adjust based on actual model requirements
-# transformers==4.36.2
-# torch==2.1.2
-# or tensorflow==2.15.0
+# NumPy - Numerical computing for image pixel arrays
+numpy>=1.24.0,<2.0.0
 
-# For now, using placeholder for Med Gemma
-# Will be replaced with actual Med Gemma installation instructions
+# ============================================
+# AI Model Support (Med Gemma)
+# ============================================
+# NOTE: The Med Gemma AI model is currently in DEMO MODE
+# For full AI functionality, you need to:
+#   1. Get access to Med Gemma from Google
+#   2. Uncomment the appropriate lines below
+#   3. Install additional dependencies
 
-# Utilities
+# For PyTorch-based Med Gemma (Recommended):
+# transformers>=4.36.0
+# torch>=2.1.0
+# accelerate>=0.25.0
+
+# OR for TensorFlow-based Med Gemma:
+# transformers>=4.36.0
+# tensorflow>=2.15.0
+
+# Additional AI utilities (uncomment if using Med Gemma):
+# sentencepiece>=0.1.99
+# protobuf>=3.20.0
+
+# ============================================
+# File Handling & Utilities
+# ============================================
+# python-multipart - Handle file uploads in FastAPI
 python-multipart==0.0.6
+
+# aiofiles - Async file operations
 aiofiles==23.2.1
+
+# python-dateutil - Better date/time handling
+python-dateutil>=2.8.0
+
+# ============================================
+# Optional Dependencies for Production
+# ============================================
+# Uncomment these for production deployment:
+
+# python-dotenv>=1.0.0        # Environment variable management
+# colorama>=0.4.6             # Colored terminal output (Windows)
+# psutil>=5.9.0               # System monitoring
